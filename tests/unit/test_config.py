@@ -11,11 +11,7 @@ def test_load_dotenv_parses_and_defers_to_real_env(
 ) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(
-        "# comment\n"
-        "\n"
-        'QDRANT_URL="http://from-file"\n'
-        "QDRANT_API_KEY='secret'\n"
-        "not a kv line\n",
+        "# comment\n\nQDRANT_URL=\"http://from-file\"\nQDRANT_API_KEY='secret'\nnot a kv line\n",
         encoding="utf-8",
     )
     monkeypatch.delenv("QDRANT_URL", raising=False)

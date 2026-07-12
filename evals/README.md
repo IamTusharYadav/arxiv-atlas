@@ -1,6 +1,6 @@
 # Evaluation golden set
 
-One YAML file per golden query. The eval runner (Phase B) executes each question against the
+One YAML file per golden query. The eval runner executes each question against the
 agent, and an LLM judge scores the answer using the rubric plus the per-query notes below.
 Queries are written before the agent exists so that evals drive development.
 
