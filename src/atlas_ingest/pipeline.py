@@ -1,5 +1,7 @@
 import argparse
+import calendar
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -88,6 +90,23 @@ def _parse_date(value: str) -> datetime:
     return datetime.fromisoformat(value).replace(tzinfo=UTC)
 
 
+def _add_month(dt: datetime) -> datetime:
+    year, month = divmod(dt.month, 12)
+    year, month = dt.year + year, month + 1
+    return dt.replace(year=year, month=month, day=min(dt.day, calendar.monthrange(year, month)[1]))
+
+
+def month_windows(start: datetime, end: datetime) -> Iterator[tuple[datetime, datetime]]:
+    """Tile [start, end) into <=1-month chunks. arXiv deep-pagination is unreliable past a
+    single month per query (see ArxivClient.fetch_window), so a 12-month backfill runs as
+    12 windowed calls; idempotent upserts make the whole thing resumable by re-dispatch."""
+    cur = start
+    while cur < end:
+        nxt = min(_add_month(cur), end)
+        yield cur, nxt
+        cur = nxt
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="ArXiv Atlas ingestion pipeline")
     parser.add_argument(
@@ -118,20 +137,32 @@ def main(argv: list[str] | None = None) -> None:
     settings = Settings.from_env()
     setup_logging(settings.log_level)
 
-    window = None
-    if args.from_date is not None:
-        window = (args.from_date, args.to_date or datetime.now(UTC))
-
     from atlas_core.embedding import SentenceTransformerEmbedder
 
-    run_ingest(
-        client=ArxivClient(),
-        store=QdrantStore.from_settings(settings),
-        embedder=SentenceTransformerEmbedder(),
-        window=window,
-        max_records=args.max_records,
-        adjacency_path=args.adjacency_out,
-    )
+    client = ArxivClient()
+    store = QdrantStore.from_settings(settings)
+    embedder = SentenceTransformerEmbedder()
+
+    def ingest(window: tuple[datetime, datetime] | None, adjacency_path: Path | None) -> None:
+        run_ingest(
+            client=client,
+            store=store,
+            embedder=embedder,
+            window=window,
+            max_records=args.max_records,
+            adjacency_path=adjacency_path,
+        )
+
+    if args.from_date is None:
+        ingest(None, args.adjacency_out)
+        return
+
+    # Backfill: chunk the range into monthly windows and only build the adjacency artifact
+    # once, after the last window has landed.
+    windows = list(month_windows(args.from_date, args.to_date or datetime.now(UTC)))
+    for i, window in enumerate(windows):
+        log.info("backfill window %d/%d: %s to %s", i + 1, len(windows), *window)
+        ingest(window, args.adjacency_out if i == len(windows) - 1 else None)
 
 
 if __name__ == "__main__":
