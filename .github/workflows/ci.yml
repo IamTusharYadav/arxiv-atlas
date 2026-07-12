@@ -17,7 +17,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --extra agents
 
       - name: Format check
         run: uv run ruff format --check .
