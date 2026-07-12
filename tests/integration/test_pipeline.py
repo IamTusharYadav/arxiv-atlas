@@ -48,6 +48,14 @@ def test_backfill_then_nightly_run(
     assert latest == datetime(2026, 7, 9, 17, 59, 45, tzinfo=UTC)
 
 
+def test_hitting_max_records_cap_fails_instead_of_truncating(
+    recorded_client: ArxivClient, memory_store: QdrantStore
+) -> None:
+    with pytest.raises(RuntimeError, match="max-records cap"):
+        run_ingest(recorded_client, memory_store, FakeEmbedder(), window=WINDOW, max_records=5)
+    assert memory_store.count() == 0
+
+
 def test_nightly_mode_requires_backfilled_corpus(
     recorded_client: ArxivClient, memory_store: QdrantStore
 ) -> None:

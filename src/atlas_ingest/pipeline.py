@@ -52,6 +52,11 @@ def run_ingest(
             raise RuntimeError("corpus is empty; run a backfill window first (--from/--to)")
         fetched = list(client.fetch_since(since - CHECKPOINT_OVERLAP, max_records=max_records))
     log.info("fetched %d papers", len(fetched))
+    if len(fetched) >= max_records:
+        # The cap is a runaway guard, not a sampler: hitting it means the window holds
+        # more papers than we fetched and the rest would be silently lost. Fail before
+        # writing anything; re-run with a higher --max-records or a narrower window.
+        raise RuntimeError(f"fetch hit the max-records cap ({max_records}); results are truncated")
 
     accepted, rejections = validate_batch(fetched)
     for rejection in rejections:

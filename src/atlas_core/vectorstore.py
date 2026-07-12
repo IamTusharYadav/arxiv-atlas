@@ -13,6 +13,10 @@ from atlas_core.models import Edge, Paper
 
 COLLECTION = "papers"
 
+# Qdrant Cloud rejects request bodies over 32 MB; a 5k-point backfill window is ~49 MB.
+# 512 points is ~5 MB, leaving headroom for payload growth.
+UPSERT_BATCH = 512
+
 
 @dataclass
 class ScoredPaper:
@@ -76,8 +80,10 @@ class QdrantStore:
             )
             for paper, vector in items
         ]
-        if points:
-            self._client.upsert(self._collection, points=points, wait=True)
+        for start in range(0, len(points), UPSERT_BATCH):
+            self._client.upsert(
+                self._collection, points=points[start : start + UPSERT_BATCH], wait=True
+            )
 
     def search(self, vector: Sequence[float], limit: int) -> list[ScoredPaper]:
         result = self._client.query_points(
