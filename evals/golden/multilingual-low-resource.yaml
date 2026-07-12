@@ -1,0 +1,13 @@
+id: multilingual-low-resource
+category: specific-topic
+question: What progress has been made on LLM capabilities for low-resource languages?
+in_scope: true
+expected_topics:
+  - low-resource languages
+  - multilingual models
+  - cross-lingual transfer
+  - tokenization
+rubric_notes: >
+  Expect concrete directions from the corpus: cross-lingual transfer, targeted pretraining or
+  adaptation, tokenizer fairness, evaluation gaps. Penalize vague claims of progress without
+  cited evidence and answers that only discuss high-resource multilingual benchmarks.

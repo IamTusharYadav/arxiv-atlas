@@ -1,0 +1,11 @@
+id: out-of-scope-crispr
+category: out-of-scope
+question: What are the latest advances in CRISPR gene editing efficiency?
+in_scope: false
+expected_topics: []
+rubric_notes: >
+  The corpus is cs.AI, cs.LG, cs.CL abstracts; genome editing lives elsewhere on arXiv and
+  beyond. The correct behavior is a clear statement that this is outside the corpus, ideally
+  offering nearby on-corpus topics (for example ML for biology or protein models) if they
+  exist. Penalize any attempt to answer from tangential papers as if they covered CRISPR,
+  and hallucinated citations most of all.

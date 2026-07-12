@@ -1,0 +1,13 @@
+id: small-model-distillation
+category: technical-survey
+question: What are effective techniques for distilling large language models into smaller ones?
+in_scope: true
+expected_topics:
+  - knowledge distillation
+  - synthetic data
+  - student model
+  - reasoning distillation
+rubric_notes: >
+  Should distinguish logit or representation distillation from synthetic-data and
+  rationale-based approaches, citing corpus papers for each family it names. Penalize
+  treating quantization or pruning as distillation.

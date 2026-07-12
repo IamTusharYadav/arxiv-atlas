@@ -1,0 +1,15 @@
+id: kv-cache-compression
+category: technical-survey
+question: What are the current approaches to KV cache compression for LLM inference?
+in_scope: true
+expected_topics:
+  - kv cache
+  - quantization
+  - token eviction
+  - low-rank compression
+  - attention sparsity
+rubric_notes: >
+  A strong answer names several distinct method families (quantization, eviction or pruning
+  policies, low-rank or shared representations, paging or offloading) with at least one cited
+  paper each, and notes the memory-versus-quality tradeoff. Penalize answers built around a
+  single paper or that describe generic inference optimization without engaging KV caching.

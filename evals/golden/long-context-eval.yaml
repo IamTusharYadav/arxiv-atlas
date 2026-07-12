@@ -1,0 +1,13 @@
+id: long-context-eval
+category: technical-survey
+question: Which benchmarks evaluate long-context understanding in LLMs, and what are their limitations?
+in_scope: true
+expected_topics:
+  - long context
+  - benchmarks
+  - needle in a haystack
+  - retrieval versus reasoning
+rubric_notes: >
+  Both halves of the question must be answered: name benchmarks present in the corpus and
+  their documented criticisms (synthetic retrieval tasks overstating capability, position
+  bias, contamination). Penalize answers that list benchmarks but skip limitations.

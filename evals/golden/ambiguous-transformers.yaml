@@ -1,0 +1,13 @@
+id: ambiguous-transformers
+category: ambiguous
+question: What's new with transformers?
+in_scope: true
+expected_topics:
+  - transformers
+  - architecture variants
+  - efficiency
+rubric_notes: >
+  Deliberately underspecified. A strong answer either states the interpretation it chose
+  (architecture research, not the electrical device or the film) and surveys a few recent,
+  cited directions, or briefly offers the main sub-areas before picking one. Penalize an
+  unfocused dump of loosely related papers and any pretense that the question was specific.

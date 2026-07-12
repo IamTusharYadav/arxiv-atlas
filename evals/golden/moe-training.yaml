@@ -1,0 +1,14 @@
+id: moe-training
+category: technical-survey
+question: What are the main open challenges in training mixture-of-experts models?
+in_scope: true
+expected_topics:
+  - mixture of experts
+  - load balancing
+  - routing
+  - expert specialization
+  - communication overhead
+rubric_notes: >
+  Expect routing and load-balancing instability, communication or memory costs, and expert
+  collapse or redundancy, each grounded in a cited paper. Penalize answers that only explain
+  what MoE is without engaging the training challenges asked about.

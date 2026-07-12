@@ -1,0 +1,14 @@
+id: process-mining-llms
+category: specific-topic
+question: How are large language models being applied to process mining?
+in_scope: true
+expected_topics:
+  - process mining
+  - event logs
+  - process discovery
+  - natural language interfaces
+rubric_notes: >
+  A niche topic where the corpus may be thin. A strong answer covers whatever the corpus
+  actually holds (semantic log understanding, conversational interfaces to process data,
+  LLM-assisted discovery) and says plainly if coverage is sparse. Penalize padding with
+  general business-process content or inventing papers to appear comprehensive.

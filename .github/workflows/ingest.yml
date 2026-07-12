@@ -1,0 +1,79 @@
+name: Ingestion
+
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    inputs:
+      from_date:
+        description: "Backfill window start (YYYY-MM-DD); leave empty for nightly mode"
+        required: false
+      to_date:
+        description: "Backfill window end (YYYY-MM-DD); defaults to now"
+        required: false
+      max_records:
+        description: "Hard cap on fetched records"
+        required: false
+        default: "5000"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-bge-small-en-v1.5
+
+      - name: Install dependencies
+        run: uv sync --extra ingest
+
+      - name: Run pipeline
+        env:
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+        run: |
+          args="--max-records ${{ inputs.max_records || '5000' }} --adjacency-out adjacency.parquet"
+          if [ -n "${{ inputs.from_date }}" ]; then
+            args="$args --from ${{ inputs.from_date }}"
+            if [ -n "${{ inputs.to_date }}" ]; then
+              args="$args --to ${{ inputs.to_date }}"
+            fi
+          fi
+          uv run atlas-ingest $args
+
+      # Adjacency lands in S3 once the AWS stack exists (Phase C); the workflow artifact
+      # keeps nightly runs inspectable until then.
+      - name: Upload adjacency artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: adjacency
+          path: adjacency.parquet
+          retention-days: 7
+
+      - name: File failure issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Ingestion run failed"
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "\"$title\" in:title" --json number --jq 'length')
+          if [ "$open" = "0" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "$title ($(date -u +%Y-%m-%d))" \
+              --body "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi

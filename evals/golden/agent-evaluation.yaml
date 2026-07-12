@@ -1,0 +1,15 @@
+id: agent-evaluation
+category: technical-survey
+question: How are LLM-based agent systems currently evaluated?
+in_scope: true
+expected_topics:
+  - agent benchmarks
+  - tool use
+  - multi-step tasks
+  - success rate
+  - environment simulation
+rubric_notes: >
+  Should cover benchmark styles (sandboxed environments, web or GUI tasks, tool-use suites),
+  what they measure, and known criticisms (contamination, static answers, single-turn bias)
+  if present in the corpus. Penalize listing benchmark names without saying what capability
+  each one probes.

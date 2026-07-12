@@ -1,0 +1,15 @@
+id: low-bit-quantization
+category: technical-survey
+question: What is the state of 4-bit and lower quantization for LLM inference?
+in_scope: true
+expected_topics:
+  - quantization
+  - post-training quantization
+  - outliers
+  - rotation
+  - quantization-aware training
+rubric_notes: >
+  Should distinguish post-training quantization from quantization-aware approaches, mention
+  the activation-outlier problem and at least one mitigation present in the corpus, and be
+  honest about quality degradation below 4 bits. Penalize conflating weight-only and
+  weight-activation quantization.

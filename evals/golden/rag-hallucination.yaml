@@ -1,0 +1,15 @@
+id: rag-hallucination
+category: technical-survey
+question: What techniques reduce hallucination in retrieval-augmented generation systems?
+in_scope: true
+expected_topics:
+  - retrieval-augmented generation
+  - grounding
+  - attribution
+  - citation verification
+  - retrieval quality
+rubric_notes: >
+  Expect several distinct levers: better retrieval, grounding or attribution in generation,
+  post-hoc verification, and abstention. Each should be tied to a cited paper. Penalize
+  generic "use better prompts" advice and any technique attributed to a paper whose abstract
+  does not describe it.

@@ -1,0 +1,15 @@
+id: speculative-decoding
+category: technical-survey
+question: How does speculative decoding accelerate LLM inference, and what are the recent variants?
+in_scope: true
+expected_topics:
+  - speculative decoding
+  - draft model
+  - verification
+  - acceptance rate
+  - self-speculation
+rubric_notes: >
+  Must explain the draft-then-verify idea correctly (losslessness via rejection sampling or
+  verification) and cite recent variants such as self-drafting, multi-token heads, or
+  tree-based drafting. Penalize confusing speculative decoding with distillation or
+  quantization, and any speedup numbers not present in cited abstracts.

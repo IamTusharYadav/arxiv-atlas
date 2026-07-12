@@ -1,0 +1,14 @@
+id: preference-optimization
+category: technical-survey
+question: What alternatives to RLHF exist for aligning language models with human preferences?
+in_scope: true
+expected_topics:
+  - preference optimization
+  - dpo
+  - reward models
+  - alignment
+rubric_notes: >
+  Expect direct preference methods (DPO and successors), and whatever else the corpus offers
+  (AI feedback, best-of-n, offline RL variants), with the claimed advantage of each drawn
+  from its abstract. Penalize describing RLHF itself at length instead of the alternatives
+  asked about.

@@ -1,0 +1,15 @@
+id: ssm-vs-transformers
+category: comparison
+question: How do state space models like Mamba compare to transformers for long-context tasks?
+in_scope: true
+expected_topics:
+  - state space models
+  - mamba
+  - long context
+  - attention complexity
+  - hybrid architectures
+rubric_notes: >
+  A good answer gives tradeoffs in both directions (linear scaling and constant memory versus
+  weaker recall or in-context learning on some tasks) and mentions hybrid designs if present
+  in the corpus. Penalize one-sided advocacy and claims of superiority not grounded in a
+  cited abstract.
