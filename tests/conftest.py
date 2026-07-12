@@ -2,11 +2,14 @@ import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 
+import anthropic
 import numpy as np
 import numpy.typing as npt
 import pytest
+from anthropic.types import Message, TextBlock, Usage
 from qdrant_client import QdrantClient
 
+from atlas_agents.bedrock import BedrockClient
 from atlas_core.embedding import CONTRACT
 from atlas_core.models import Paper
 from atlas_core.vectorstore import QdrantStore
@@ -59,3 +62,48 @@ def memory_store() -> QdrantStore:
 @pytest.fixture
 def fake_embedder() -> FakeEmbedder:
     return FakeEmbedder()
+
+
+def make_message(
+    text: str,
+    model: str = "anthropic.claude-haiku-4-5",
+    input_tokens: int = 100,
+    output_tokens: int = 50,
+    stop_reason: str = "end_turn",
+) -> Message:
+    return Message.model_construct(
+        id="msg_test",
+        type="message",
+        role="assistant",
+        model=model,
+        content=[TextBlock(type="text", text=text)],
+        stop_reason=stop_reason,
+        stop_sequence=None,
+        usage=Usage(input_tokens=input_tokens, output_tokens=output_tokens),
+    )
+
+
+class FakeMessages:
+    """Scripted Bedrock outcomes per call; exceptions in the list are raised."""
+
+    def __init__(self, outcomes: list[Message | Exception]) -> None:
+        self.outcomes = list(outcomes)
+        self.calls: list[dict[str, object]] = []
+
+    def create(self, **kwargs: object) -> Message:
+        self.calls.append(kwargs)
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+def make_bedrock_client(
+    outcomes: list[Message | Exception],
+) -> tuple[BedrockClient, FakeMessages]:
+    fake = FakeMessages(outcomes)
+    inner = anthropic.AnthropicBedrockMantle(
+        aws_region="us-east-1", aws_access_key="test", aws_secret_key="test"
+    )
+    inner.messages = fake  # type: ignore[assignment]
+    return BedrockClient(client=inner), fake

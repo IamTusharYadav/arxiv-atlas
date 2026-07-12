@@ -1,60 +1,18 @@
 import anthropic
 import httpx
 import pytest
-from anthropic.types import Message, TextBlock, Usage
 from pydantic import BaseModel
 
-from atlas_agents.bedrock import HAIKU, SONNET, BedrockClient, StructuredOutputError
+from atlas_agents.bedrock import HAIKU, SONNET, StructuredOutputError
 from atlas_core.costs import usd
-
-
-def make_message(
-    text: str,
-    model: str = HAIKU,
-    input_tokens: int = 100,
-    output_tokens: int = 50,
-    stop_reason: str = "end_turn",
-) -> Message:
-    return Message.model_construct(
-        id="msg_test",
-        type="message",
-        role="assistant",
-        model=model,
-        content=[TextBlock(type="text", text=text)],
-        stop_reason=stop_reason,
-        stop_sequence=None,
-        usage=Usage(input_tokens=input_tokens, output_tokens=output_tokens),
-    )
+from tests.conftest import make_bedrock_client as make_client
+from tests.conftest import make_message
 
 
 def throttled() -> anthropic.RateLimitError:
     request = httpx.Request("POST", "https://bedrock.test/messages")
     response = httpx.Response(429, request=request)
     return anthropic.RateLimitError("throttled", response=response, body=None)
-
-
-class FakeMessages:
-    """Scripted outcomes per call; exceptions in the list are raised."""
-
-    def __init__(self, outcomes: list[Message | Exception]) -> None:
-        self.outcomes = list(outcomes)
-        self.calls: list[dict[str, object]] = []
-
-    def create(self, **kwargs: object) -> Message:
-        self.calls.append(kwargs)
-        outcome = self.outcomes.pop(0)
-        if isinstance(outcome, Exception):
-            raise outcome
-        return outcome
-
-
-def make_client(outcomes: list[Message | Exception]) -> tuple[BedrockClient, FakeMessages]:
-    fake = FakeMessages(outcomes)
-    inner = anthropic.AnthropicBedrockMantle(
-        aws_region="us-east-1", aws_access_key="test", aws_secret_key="test"
-    )
-    inner.messages = fake  # type: ignore[assignment]
-    return BedrockClient(client=inner), fake
 
 
 class Answer(BaseModel):
