@@ -18,6 +18,7 @@ log = logging.getLogger(__name__)
 MAX_ITERS = 6
 BUDGET_USD = 0.12
 
+
 class BudgetExceeded(RuntimeError):
     """The query crossed its per-query spend cap; the run aborts rather than overspend."""
 
