@@ -19,6 +19,8 @@ dependencies = [
 ingest = ["sentence-transformers>=3.0"]
 agents = [
     "anthropic[bedrock]>=0.92",
+    "langfuse>=3.0",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
@@ -62,7 +64,7 @@ strict = true
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["pyarrow.*", "sentence_transformers.*"]
+module = ["pyarrow.*", "sentence_transformers.*", "yaml", "langfuse.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

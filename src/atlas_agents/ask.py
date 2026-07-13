@@ -10,23 +10,19 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
-from atlas_agents.bedrock import HAIKU, BedrockClient
+from atlas_agents.bedrock import BedrockClient
 from atlas_agents.harness import BUDGET_USD, MAX_ITERS, RunContext, StepRecord, run_loop
+from atlas_agents.prompts import CHECK
 from atlas_agents.steps.extractor import PaperClaims, extract
 from atlas_agents.steps.planner import MAX_SUBQUERIES, Plan, plan_query
 from atlas_agents.steps.reranker import rerank
 from atlas_agents.steps.retriever import PER_QUERY, retrieve
 from atlas_agents.steps.synthesizer import synthesize
+from atlas_agents.tracing import query_trace
 from atlas_core.embedding import Embedder
 from atlas_core.vectorstore import ScoredPaper, VectorStore
 
 SCOPE_PREFIX = "This corpus covers arXiv abstracts in cs.AI, cs.LG and cs.CL only."
-
-CHECK_SYSTEM = f"""\
-You judge whether gathered evidence meets a stop criterion for answering a research
-question. Sufficient means answer writing can start; do not demand perfection beyond
-the criterion. When insufficient, propose up to {MAX_SUBQUERIES} refined vector-search
-queries targeting exactly what is missing."""
 
 
 class EvidenceCheck(BaseModel):
@@ -95,7 +91,9 @@ def ask(
                 return None
         return synthesize(client, ctx, question, list(state.papers.values()), evidence)
 
-    brief, ctx = run_loop(task, max_iters=max_iters, budget_usd=budget_usd)
+    with query_trace(question) as sink:
+        brief, ctx = run_loop(task, max_iters=max_iters, budget_usd=budget_usd, sink=sink)
+        sink.set_output(brief)
     cited = [state.papers[c.arxiv_id] for c in state.claims.values()]
     return Answer(brief=brief, papers=cited, trace=ctx.trace, cost_usd=ctx.spent_usd)
 
@@ -105,11 +103,17 @@ def _check_evidence(
 ) -> EvidenceCheck:
     listing = "\n".join(f"- [{c.arxiv_id}] " + "; ".join(c.claims) for c in claims)
     check, completion = client.complete_structured(
-        model=HAIKU,
-        system=CHECK_SYSTEM,
+        model=CHECK.model,
+        system=CHECK.render(max_subqueries=MAX_SUBQUERIES),
         prompt=f"<criterion>{stop_criterion}</criterion>\n\n<evidence>\n{listing}\n</evidence>",
         output_type=EvidenceCheck,
         max_tokens=300,
     )
-    ctx.record("check", "sufficient" if check.sufficient else "needs more evidence", completion)
+    ctx.record(
+        "check",
+        "sufficient" if check.sufficient else "needs more evidence",
+        completion,
+        model=CHECK.model,
+        version=CHECK.version,
+    )
     return check
