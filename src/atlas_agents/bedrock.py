@@ -86,6 +86,7 @@ class BedrockClient:
         prompt: str,
         output_type: type[T],
         max_tokens: int = 1024,
+        temperature: float | None = None,
     ) -> tuple[T, Completion]:
         """Completion constrained to output_type's JSON schema, validated by pydantic.
 
@@ -105,6 +106,7 @@ class BedrockClient:
             messages=messages,
             max_tokens=max_tokens,
             output_config=output_config,
+            temperature=temperature,
         )
         try:
             return output_type.model_validate_json(first.text), first
@@ -124,6 +126,7 @@ class BedrockClient:
                 messages=messages,
                 max_tokens=max_tokens,
                 output_config=output_config,
+                temperature=temperature,
             )
             combined = replace(
                 second,
@@ -146,8 +149,11 @@ class BedrockClient:
         messages: list[MessageParam],
         max_tokens: int,
         output_config: dict[str, Any] | None = None,
+        temperature: float | None = None,
     ) -> Completion:
         extra: dict[str, Any] = {"output_config": output_config} if output_config else {}
+        if temperature is not None:
+            extra["temperature"] = temperature
         try:
             msg = self._client.messages.create(
                 model=model, system=system, messages=messages, max_tokens=max_tokens, **extra

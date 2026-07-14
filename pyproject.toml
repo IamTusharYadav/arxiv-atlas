@@ -61,7 +61,7 @@ select = [
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src", "tests"]
+files = ["src", "tests", "evals"]
 
 [[tool.mypy.overrides]]
 module = ["pyarrow.*", "sentence_transformers.*", "yaml", "langfuse.*"]
