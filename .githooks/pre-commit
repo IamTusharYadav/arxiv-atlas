@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Block a commit that CI's `ruff format --check` would reject, so unformatted code
+# never reaches a PR. Same command CI runs. Activate once per clone with:
+#   git config core.hooksPath .githooks
+set -e
+
+if ! uv run ruff format --check . ; then
+  echo
+  echo "commit blocked: files above are not formatted. run:  uv run ruff format ."
+  echo "then re-stage and commit."
+  exit 1
+fi

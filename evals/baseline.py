@@ -54,8 +54,7 @@ def compare(current: Aggregate, baseline: Aggregate | None) -> Comparison:
     regressions = [
         dim
         for dim in GATED_DIMS
-        if baseline is not None
-        and getattr(baseline, dim) - getattr(current, dim) > REGRESSION_DROP
+        if baseline is not None and getattr(baseline, dim) - getattr(current, dim) > REGRESSION_DROP
     ]
     return Comparison(current=current, baseline=baseline, regressions=regressions)
 
