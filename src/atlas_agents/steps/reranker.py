@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from atlas_agents.bedrock import BedrockClient
 from atlas_agents.harness import RunContext
 from atlas_agents.prompts import RERANKER
+from atlas_agents.steps.evidence import paper_block
 from atlas_core.vectorstore import ScoredPaper
 
 KEEP = 8
@@ -41,8 +42,7 @@ def rerank(
         return []
 
     blocks = "\n\n".join(
-        f"<paper id={s.paper.arxiv_id!r}>\n{s.paper.title}\n"
-        f"{s.paper.abstract[:_ABSTRACT_CHARS]}\n</paper>"
+        paper_block(s.paper.arxiv_id, s.paper.title, s.paper.abstract, _ABSTRACT_CHARS)
         for s in candidates
     )
     reranking, completion = client.complete_structured(

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from atlas_agents.bedrock import BedrockClient
 from atlas_agents.harness import RunContext
 from atlas_agents.prompts import EXTRACTOR
+from atlas_agents.steps.evidence import paper_block
 from atlas_core.vectorstore import ScoredPaper
 
 _ABSTRACT_CHARS = 1500
@@ -35,8 +36,7 @@ def extract(
         return []
 
     blocks = "\n\n".join(
-        f"<paper id={s.paper.arxiv_id!r}>\n{s.paper.title}\n"
-        f"{s.paper.abstract[:_ABSTRACT_CHARS]}\n</paper>"
+        paper_block(s.paper.arxiv_id, s.paper.title, s.paper.abstract, _ABSTRACT_CHARS)
         for s in papers
     )
     extraction, completion = client.complete_structured(

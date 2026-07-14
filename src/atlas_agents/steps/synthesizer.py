@@ -10,6 +10,7 @@ import re
 from atlas_agents.bedrock import BedrockClient
 from atlas_agents.harness import RunContext
 from atlas_agents.prompts import SYNTHESIZER
+from atlas_agents.steps.evidence import paper_block
 from atlas_agents.steps.extractor import PaperClaims
 from atlas_core.vectorstore import ScoredPaper
 
@@ -34,9 +35,11 @@ def synthesize(
 ) -> str:
     titles = {s.paper.arxiv_id: s.paper.title for s in papers}
     evidence = "\n\n".join(
-        f"<paper id={c.arxiv_id!r}>\n{titles.get(c.arxiv_id, '')}\n"
-        + "\n".join(f"- {claim}" for claim in c.claims)
-        + "\n</paper>"
+        paper_block(
+            c.arxiv_id,
+            titles.get(c.arxiv_id, ""),
+            "\n".join(f"- {claim}" for claim in c.claims),
+        )
         for c in claims
     )
     prompt = f"<question>{question}</question>\n\n{evidence}"
