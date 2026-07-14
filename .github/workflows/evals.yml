@@ -1,0 +1,48 @@
+name: Evals
+
+# Opt-in smoke gate: label a PR `run-evals` to score the golden subset against the baseline.
+# Kept out of ci.yml so the heavy ruff/mypy/pytest job does not re-run on every label change;
+# this workflow needs live Bedrock and a populated Qdrant, which the standard checks do not.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    if: contains(github.event.pull_request.labels.*.name, 'run-evals')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-bge-small-en-v1.5
+
+      # run_evals answers each query with the live agent (agents extra) and embeds the query
+      # locally (ingest extra), then judges and compares against evals/baseline.json.
+      - name: Install dependencies
+        run: uv sync --extra agents --extra ingest
+
+      - name: Eval smoke (first 15 golden queries)
+        env:
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+        run: uv run python -m evals.run_evals --subset 15
