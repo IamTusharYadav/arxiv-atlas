@@ -7,14 +7,23 @@ from fastapi.testclient import TestClient
 from atlas_agents.bedrock import SONNET
 from atlas_api import create_app
 from atlas_core.models import Edge
+from atlas_core.ratelimit import RateLimiter
 from atlas_core.vectorstore import QdrantStore
 from tests.conftest import FakeEmbedder, make_bedrock_client, make_message
 from tests.unit.test_ask import IDS, check_json, extract_json, plan_json, rerank_json, seed
+from tests.unit.test_ratelimit import MemoryBuckets
 
 
-def client_for(store: QdrantStore, messages: list[Message | Exception]) -> TestClient:
+def client_for(
+    store: QdrantStore,
+    messages: list[Message | Exception],
+    *,
+    limiter: RateLimiter | None = None,
+) -> TestClient:
     bedrock, _ = make_bedrock_client(messages)
-    return TestClient(create_app(store=store, embedder=FakeEmbedder(), client=bedrock))
+    return TestClient(
+        create_app(store=store, embedder=FakeEmbedder(), client=bedrock, limiter=limiter)
+    )
 
 
 def test_status_reports_corpus_size(memory_store: QdrantStore, fake_embedder: FakeEmbedder) -> None:
@@ -89,6 +98,20 @@ def test_query_returns_brief_papers_and_trace(
 
 def test_query_rejects_blank_question(memory_store: QdrantStore) -> None:
     assert client_for(memory_store, []).post("/api/query", json={"question": ""}).status_code == 422
+
+
+def test_rate_limit_returns_429_with_retry_after(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    # burst=1: the first request spends the only token, the second is throttled. TestClient
+    # sends no X-Forwarded-For, so every request shares one bucket.
+    limiter = RateLimiter(MemoryBuckets(), rate_per_s=1 / 6, burst=1)
+    api = client_for(memory_store, [], limiter=limiter)
+    assert api.get("/api/status").status_code == 200
+    resp = api.get("/api/status")
+    assert resp.status_code == 429
+    assert int(resp.headers["Retry-After"]) > 0
 
 
 def test_query_over_budget_returns_503(

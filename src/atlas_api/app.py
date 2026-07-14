@@ -1,4 +1,8 @@
-from fastapi import FastAPI, HTTPException
+import hashlib
+from collections.abc import Awaitable, Callable
+
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from atlas_agents.ask import ask
@@ -6,6 +10,7 @@ from atlas_agents.bedrock import BedrockClient
 from atlas_agents.harness import BudgetExceeded, IterationsExhausted
 from atlas_agents.steps.synthesizer import UngroundedCitations
 from atlas_core.embedding import Embedder
+from atlas_core.ratelimit import RateLimiter
 from atlas_core.vectorstore import VectorStore
 
 
@@ -59,8 +64,43 @@ class StatusResponse(BaseModel):
     corpus_size: int
 
 
-def create_app(*, store: VectorStore, embedder: Embedder, client: BedrockClient) -> FastAPI:
+def _client_key(request: Request) -> str:
+    # Behind API Gateway the caller is the first X-Forwarded-For hop; hash it so raw IPs never
+    # reach the bucket store or logs.
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        ip = forwarded.split(",")[0].strip()
+    elif request.client is not None:
+        ip = request.client.host
+    else:
+        ip = "unknown"
+    return hashlib.sha256(ip.encode()).hexdigest()
+
+
+def create_app(
+    *,
+    store: VectorStore,
+    embedder: Embedder,
+    client: BedrockClient,
+    limiter: RateLimiter | None = None,
+) -> FastAPI:
     app = FastAPI(title="ArXiv Atlas API", version="0.1.0")
+
+    if limiter is not None:
+        rl = limiter  # bound non-optional so the closure below type-checks
+
+        @app.middleware("http")
+        async def rate_limit(
+            request: Request, call_next: Callable[[Request], Awaitable[Response]]
+        ) -> Response:
+            retry_after = rl.allow(_client_key(request))
+            if retry_after:
+                return JSONResponse(
+                    {"detail": "rate limit exceeded"},
+                    status_code=429,
+                    headers={"Retry-After": str(retry_after)},
+                )
+            return await call_next(request)
 
     @app.post("/api/query")
     def query(req: QueryRequest) -> QueryResponse:
