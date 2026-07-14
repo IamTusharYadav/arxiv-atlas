@@ -3,11 +3,15 @@ from fastapi.testclient import TestClient
 
 from atlas_agents.bedrock import SONNET
 from atlas_api import create_app
+from atlas_core.budget import DailyBudgetGuard
+from atlas_core.cache import ResponseCache
 from atlas_core.models import Edge
 from atlas_core.ratelimit import RateLimiter
 from atlas_core.vectorstore import QdrantStore
 from tests.conftest import FakeEmbedder, make_bedrock_client, make_message
 from tests.unit.test_ask import IDS, check_json, extract_json, plan_json, rerank_json, seed
+from tests.unit.test_budget import _FakeTable
+from tests.unit.test_cache import _FakeStore
 from tests.unit.test_ratelimit import MemoryBuckets
 
 
@@ -16,10 +20,19 @@ def client_for(
     messages: list[Message | Exception],
     *,
     limiter: RateLimiter | None = None,
+    cache: ResponseCache | None = None,
+    budget: DailyBudgetGuard | None = None,
 ) -> TestClient:
     bedrock, _ = make_bedrock_client(messages)
     return TestClient(
-        create_app(store=store, embedder=FakeEmbedder(), client=bedrock, limiter=limiter)
+        create_app(
+            store=store,
+            embedder=FakeEmbedder(),
+            client=bedrock,
+            limiter=limiter,
+            cache=cache,
+            budget=budget,
+        )
     )
 
 
@@ -117,4 +130,41 @@ def test_query_over_budget_returns_503(
     seed(memory_store, fake_embedder)
     # A planner call charged past the per-query cap aborts the run; the route surfaces it as 503.
     api = client_for(memory_store, [make_message(plan_json(), output_tokens=5_000_000)])
+    assert api.post("/api/query", json={"question": "kv cache?"}).status_code == 503
+
+
+def test_query_cache_hit_skips_bedrock(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    brief_md = f"Cached brief [{IDS[0]}]."
+    # Exactly one run's worth of scripted calls; a cache hit on the repeat spends none of them.
+    api = client_for(
+        memory_store,
+        [
+            make_message(plan_json()),
+            make_message(rerank_json({IDS[0]: 9, IDS[1]: 7, IDS[2]: 2})),
+            make_message(extract_json([IDS[0], IDS[1]])),
+            make_message(check_json(sufficient=True)),
+            make_message(brief_md, model=SONNET),
+        ],
+        cache=ResponseCache(_FakeStore()),
+    )
+    first = api.post("/api/query", json={"question": "kv cache?"})
+    assert first.status_code == 200 and first.json()["cached"] is False
+
+    second = api.post("/api/query", json={"question": "kv cache?"})
+    assert second.status_code == 200
+    body = second.json()
+    assert body["cached"] is True
+    assert body["brief"] == brief_md
+
+
+def test_query_over_daily_budget_returns_503(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    guard = DailyBudgetGuard(_FakeTable(), daily_cap_usd=1.00)
+    guard.charge(1.00)  # day already at cap, so the check denies before any Bedrock call
+    api = client_for(memory_store, [], budget=guard)
     assert api.post("/api/query", json={"question": "kv cache?"}).status_code == 503

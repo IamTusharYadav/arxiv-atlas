@@ -5,11 +5,7 @@ from pathlib import Path
 
 
 def load_dotenv(path: Path | None = None) -> None:
-    """Minimal KEY=VALUE loader; real environment variables always win.
-
-    ponytail: hand-rolled to avoid a python-dotenv dependency for two variables.
-    Swap in python-dotenv if we ever need multiline values or interpolation.
-    """
+    """Minimal KEY=VALUE loader; real environment variables always win."""
     env_file = path or Path(".env")
     if not env_file.is_file():
         return
@@ -41,7 +37,6 @@ class Settings:
 
 
 def setup_logging(level: str = "INFO") -> None:
-    """Call once per entrypoint; modules keep using logging.getLogger(__name__)."""
     logging.basicConfig(
         level=level.upper(), format="%(asctime)s %(levelname)s %(name)s %(message)s"
     )

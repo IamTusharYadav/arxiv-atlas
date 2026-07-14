@@ -39,8 +39,6 @@ class DailyBudgetGuard:
         # ADD is atomic, so the counter is always accurate; two queries that both clear
         # check() at just under cap can each still charge, overshooting by up to one
         # per-query cap apiece before the next check() denies. That bound is acceptable.
-        # ponytail: bounded overshoot; switch to a conditional UpdateItem if a hard,
-        # never-exceed cap is ever required.
         key = "budget#" + datetime.now(UTC).strftime("%Y-%m-%d")
         try:
             resp = self._table.update_item(

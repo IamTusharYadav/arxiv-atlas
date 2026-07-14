@@ -1,4 +1,4 @@
-"""One-shot live smoke test of the Bedrock client. Costs well under a cent.
+"""One-shot live smoke test of the Bedrock client.
 
 Run: uv run python scripts/smoke_bedrock.py [region]
 Needs AWS credentials (env or ~/.aws/credentials) with bedrock:InvokeModel.

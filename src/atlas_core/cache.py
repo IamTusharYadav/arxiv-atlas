@@ -44,8 +44,7 @@ class ResponseCache:
             log.warning("cache lookup failed, treating as miss: %s", err)
             return None
         # Re-check expiry here: DynamoDB TTL deletion lags up to 48h, so a "recent" row
-        # may already be stale. ponytail: linear scan, fine at demo volume; add a vector
-        # index if the cache ever grows past a few hundred live entries.
+        # may already be stale.
         now = time()
         best: CacheEntry | None = None
         best_sim = self._floor

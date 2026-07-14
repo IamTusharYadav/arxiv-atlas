@@ -15,8 +15,6 @@ def collapse_whitespace(text: str) -> str:
 
 
 def normalize_for_embedding(text: str) -> str:
-    # Does not handle escaped \$ inside math; rare in abstracts and the cost is a few
-    # lost characters, not a crash.
     text = unicodedata.normalize("NFC", text)
     text = _MATH.sub(" ", text)
     text = _DROP_ARG.sub(" ", text)

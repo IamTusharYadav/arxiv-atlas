@@ -9,7 +9,9 @@ from atlas_agents.ask import ask
 from atlas_agents.bedrock import BedrockClient
 from atlas_agents.harness import BudgetExceeded, IterationsExhausted
 from atlas_agents.steps.synthesizer import UngroundedCitations
-from atlas_core.embedding import Embedder
+from atlas_core.budget import DailyBudgetExceeded, DailyBudgetGuard
+from atlas_core.cache import ResponseCache
+from atlas_core.embedding import QUERY_PREFIX, Embedder
 from atlas_core.ratelimit import RateLimiter
 from atlas_core.vectorstore import VectorStore
 
@@ -39,6 +41,7 @@ class QueryResponse(BaseModel):
     papers: list[PaperOut]
     trace: list[TraceStep]
     cost_usd: float
+    cached: bool = False
 
 
 class GraphNode(BaseModel):
@@ -83,6 +86,8 @@ def create_app(
     embedder: Embedder,
     client: BedrockClient,
     limiter: RateLimiter | None = None,
+    cache: ResponseCache | None = None,
+    budget: DailyBudgetGuard | None = None,
 ) -> FastAPI:
     app = FastAPI(title="ArXiv Atlas API", version="0.1.0")
 
@@ -104,12 +109,25 @@ def create_app(
 
     @app.post("/api/query")
     def query(req: QueryRequest) -> QueryResponse:
+        # Order: rate-limit (middleware) -> cache -> budget -> agent. A cache hit is free to
+        # serve, so it runs before the budget gate.
+        embedding = None
+        if cache is not None:
+            embedding = embedder.embed([QUERY_PREFIX + req.question])[0]
+            hit = cache.get(embedding)
+            if hit is not None:
+                return QueryResponse.model_validate(hit).model_copy(update={"cached": True})
+        if budget is not None:
+            try:
+                budget.check()
+            except DailyBudgetExceeded as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
         try:
             answer = ask(req.question, client=client, store=store, embedder=embedder)
         except (BudgetExceeded, IterationsExhausted, UngroundedCitations) as exc:
             # The loop hitting its caps or failing to ground a brief, not bad input: 503, not 500.
             raise HTTPException(status_code=503, detail=str(exc)) from exc
-        return QueryResponse(
+        response = QueryResponse(
             brief=answer.brief,
             papers=[
                 PaperOut(
@@ -123,6 +141,13 @@ def create_app(
             trace=[TraceStep.model_validate(r, from_attributes=True) for r in answer.trace],
             cost_usd=answer.cost_usd,
         )
+        if budget is not None:
+            # ponytail: only successful runs are charged; a run that aborts on a cap still spent.
+            # Upgrade path: surface ctx.spent_usd on the terminal exceptions and charge here too.
+            budget.charge(answer.cost_usd)
+        if cache is not None and embedding is not None:
+            cache.put(embedding, response.model_dump())
+        return response
 
     @app.get("/api/graph/{arxiv_id}")
     def graph(arxiv_id: str) -> GraphResponse:

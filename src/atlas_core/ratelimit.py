@@ -6,7 +6,6 @@ from typing import Protocol
 log = logging.getLogger(__name__)
 
 # Coarse abuse stop for anonymous traffic; the fail-closed budget guard is the real spend cap.
-# ponytail: loose enough not to trip graph browsing, tune against real traffic.
 DEFAULT_RATE_PER_S = 1 / 2
 DEFAULT_BURST = 15
 
