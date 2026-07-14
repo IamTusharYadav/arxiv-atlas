@@ -1,6 +1,3 @@
-"""API routes against a local stack (memory Qdrant, scripted Bedrock); the loop itself is
-covered by test_ask."""
-
 from anthropic.types import Message
 from fastapi.testclient import TestClient
 

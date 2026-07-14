@@ -1,7 +1,3 @@
-"""Injection fixtures: an untrusted abstract must stay inside its data block and not be read
-as instructions. Live model behaviour is scored by the injection-in-abstracts golden query;
-these just pin the structural defenses a prompt edit could quietly break."""
-
 import json
 
 from atlas_agents.harness import RunContext

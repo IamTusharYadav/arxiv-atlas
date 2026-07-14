@@ -1,6 +1,3 @@
-"""Loader for the golden query set (evals/golden/*.yaml). One file per query; the id keys
-eval history forever, so it is validated against the filename here rather than trusted."""
-
 from dataclasses import dataclass
 from pathlib import Path
 

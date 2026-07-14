@@ -1,6 +1,3 @@
-"""Bedrock client with model tiering, one-shot Sonnet-to-Haiku degradation when throttling
-outlasts the SDK's retries, and structured-output repair."""
-
 import logging
 import os
 from dataclasses import dataclass, replace

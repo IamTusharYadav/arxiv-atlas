@@ -1,9 +1,3 @@
-"""Serve a stored brief when a new question is near-identical to one already answered, so
-repeats and light paraphrases skip Bedrock. Matches on query-embedding cosine, not string
-equality; the floor is high because a wrong cache hit is worse than a miss. Fails open both
-ways (an error costs a Bedrock call, never a denied request) and takes an injected store so
-atlas_core stays SDK-free."""
-
 import logging
 from dataclasses import dataclass
 from time import time

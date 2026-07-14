@@ -1,5 +1,5 @@
-"""Contract tests against the real embedding model. Downloads ~130 MB on first run, so they
-are deselected by default; run with `uv run pytest -m model` (needs the ingest extra)."""
+"""Deselected by default (downloads ~130 MB on first run); run with
+`uv run pytest -m model` (needs the ingest extra)."""
 
 import numpy as np
 import pytest

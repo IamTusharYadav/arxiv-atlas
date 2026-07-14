@@ -1,7 +1,3 @@
-"""Prompt registry. Each prompt is a versioned YAML card (id, semver, model binding, changelog)
-loaded and validated at import, so a bad card fails the process rather than shipping. Traces
-tag every call with the card version, which makes a rollback a one-line version bump."""
-
 import importlib.resources
 import re
 from dataclasses import dataclass

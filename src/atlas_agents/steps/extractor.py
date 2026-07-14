@@ -1,6 +1,3 @@
-"""Extractor: one batched Haiku call pulls each paper's key claims. Handing the synthesizer
-claims instead of full abstracts keeps the Sonnet call cheap."""
-
 from pydantic import BaseModel
 
 from atlas_agents.bedrock import BedrockClient

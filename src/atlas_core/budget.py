@@ -1,8 +1,3 @@
-"""Global daily spend cap across every query, on top of the harness per-query cap. The running
-total is a DynamoDB atomic counter keyed per UTC day, so concurrent Lambdas share one number.
-Fail-closed: any counter error denies the request rather than spend unverified. The table is
-injected so atlas_core stays free of the AWS SDK."""
-
 import logging
 from datetime import UTC, datetime
 from decimal import Decimal

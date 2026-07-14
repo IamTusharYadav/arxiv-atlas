@@ -1,7 +1,3 @@
-"""Aggregate judgements into per-dimension means and compare a run against the stored baseline.
-The CI gate blocks a merge when a gated dimension regresses by more than REGRESSION_DROP;
-comparison is on the aggregate, never per-query, so one noisy answer cannot fail the gate."""
-
 import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime

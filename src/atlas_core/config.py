@@ -1,6 +1,3 @@
-"""Process configuration: .env loading, settings, logging. Only deployment values live here;
-the embedding model is a frozen contract (see atlas_core.embedding), not a setting."""
-
 import logging
 import os
 from dataclasses import dataclass

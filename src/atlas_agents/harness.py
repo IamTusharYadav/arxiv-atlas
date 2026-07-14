@@ -1,7 +1,3 @@
-"""Generic agent loop: iteration cap, per-query budget cap, per-step trace. Framework-free by
-ADR 0002 (a plain function-call cycle); it owns termination and budget accounting, not the
-steps themselves."""
-
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field

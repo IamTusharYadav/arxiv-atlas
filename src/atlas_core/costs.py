@@ -1,6 +1,4 @@
-"""Token to USD for the Bedrock models we call. Prices are USD per million tokens, checked
-against Anthropic pricing on 2026-07-12; re-verify when adding a model."""
-
+# USD per million tokens (input, output), checked 2026-07-12; re-verify when adding a model.
 _PER_MTOK: dict[str, tuple[float, float]] = {
     "us.anthropic.claude-haiku-4-5-20251001-v1:0": (1.00, 5.00),
     "us.anthropic.claude-sonnet-4-6": (3.00, 15.00),

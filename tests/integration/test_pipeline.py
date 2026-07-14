@@ -1,6 +1,3 @@
-"""End-to-end pipeline runs against the recorded arXiv fixture, an in-memory Qdrant, and a
-deterministic fake embedder. No network, no credentials, no model download."""
-
 import re
 from datetime import UTC, datetime
 from pathlib import Path

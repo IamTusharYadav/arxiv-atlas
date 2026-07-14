@@ -1,5 +1,3 @@
-"""End-to-end ask() against an in-memory Qdrant and scripted Bedrock responses."""
-
 import json
 
 from atlas_agents.ask import ask

@@ -1,6 +1,3 @@
-"""De-noise text for embedding input: strip LaTeX markup and math that would otherwise poison
-similarity. Stored titles and abstracts keep their original form for display."""
-
 import re
 import unicodedata
 

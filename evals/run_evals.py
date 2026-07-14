@@ -1,10 +1,7 @@
-"""Eval runner CLI: answer each golden query, judge it, and compare the aggregate to the stored
-baseline. Exits non-zero on a gated regression so CI can block a merge. Needs live Bedrock and
-a populated Qdrant.
-
-    uv run python -m evals.run_evals --subset 15      # PR smoke gate
-    uv run python -m evals.run_evals --full           # nightly
-    uv run python -m evals.run_evals --full --update-baseline   # re-baseline after review
+"""Usage:
+uv run python -m evals.run_evals --subset 15      # PR smoke gate
+uv run python -m evals.run_evals --full           # nightly
+uv run python -m evals.run_evals --full --update-baseline   # re-baseline after review
 """
 
 import argparse

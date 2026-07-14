@@ -1,7 +1,3 @@
-"""Decompose the question into subqueries and a stop criterion (Haiku; this is mechanical
-decomposition, not synthesis). The loop checks the stop criterion after each retrieval
-round."""
-
 from pydantic import BaseModel, model_validator
 
 from atlas_agents.bedrock import BedrockClient

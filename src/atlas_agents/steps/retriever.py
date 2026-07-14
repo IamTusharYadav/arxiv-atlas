@@ -1,6 +1,3 @@
-"""Vector search over the corpus for each subquery; no model call. Candidates are merged
-across subqueries, keeping each paper's best score."""
-
 from atlas_agents.harness import RunContext
 from atlas_core.embedding import QUERY_PREFIX, Embedder
 from atlas_core.vectorstore import ScoredPaper, VectorStore

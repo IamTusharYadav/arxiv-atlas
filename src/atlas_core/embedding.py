@@ -1,6 +1,3 @@
-"""The frozen embedding contract everything downstream depends on: model, dimension, input
-format. Changing any of them is a version bump and forces a full re-index."""
-
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -18,6 +15,7 @@ class EmbeddingContract:
     version: int
 
 
+# Frozen contract: changing model, dimension, or format forces a full re-index.
 CONTRACT = EmbeddingContract(model_id="BAAI/bge-small-en-v1.5", dimension=384, version=1)
 
 # bge-small-en-v1.5 expects this prefix on queries and no prefix on passages.

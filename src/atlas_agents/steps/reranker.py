@@ -1,5 +1,3 @@
-"""Reranker: one batched Haiku call scores the candidates; keep the top few above a floor."""
-
 from pydantic import BaseModel, Field
 
 from atlas_agents.bedrock import BedrockClient

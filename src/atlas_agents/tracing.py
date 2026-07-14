@@ -1,7 +1,3 @@
-"""Langfuse tracing: one trace per question, one span per loop step (token counts, cost,
-prompt version). Fire-and-forget and fail-open, so no trace error or slow collector can block
-or break a request, and missing credentials disable it entirely."""
-
 import logging
 import os
 import threading
