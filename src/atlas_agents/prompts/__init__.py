@@ -1,12 +1,6 @@
-"""Versioned prompt registry: the model-registry analogue for a system with no gradient
-training (plan section F). Each prompt is a YAML card next to this loader carrying an id,
-a semver version, its model binding, and a changelog. Traces tag every model call with the
-prompt version so eval results correlate with prompt changes and a rollback is a one-line
-version bump on the card.
-
-Cards load and validate once at import; a bad card fails the process rather than shipping a
-mismatched or unversioned prompt.
-"""
+"""Prompt registry. Each prompt is a versioned YAML card (id, semver, model binding, changelog)
+loaded and validated at import, so a bad card fails the process rather than shipping. Traces
+tag every call with the card version, which makes a rollback a one-line version bump."""
 
 import importlib.resources
 import re

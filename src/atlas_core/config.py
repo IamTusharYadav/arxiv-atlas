@@ -1,9 +1,5 @@
-"""Process-level configuration: .env loading, settings, logging setup.
-
-Only deployment-specific values live here (credentials, log level). The embedding model is
-deliberately absent: it is a frozen contract (see atlas_core.embedding), not a setting.
-Bedrock model ids join Settings in Phase B.
-"""
+"""Process configuration: .env loading, settings, logging. Only deployment values live here;
+the embedding model is a frozen contract (see atlas_core.embedding), not a setting."""
 
 import logging
 import os

@@ -1,14 +1,7 @@
-"""Fail-closed daily spend guard: a global cap across every query for the day.
-
-The per-query cap in the harness bounds one runaway loop; this bounds the day's
-aggregate so abuse or a flood of queries cannot drain Bedrock credits (plan risk 1).
-The running total lives in a DynamoDB atomic counter keyed per UTC day so concurrent
-Lambda invocations share one number no in-process counter could give them. Fail-closed
-means any backend error denies the request rather than letting spend proceed unverified.
-
-The table is injected (boto3 Table in the API path, a fake in tests) so atlas_core
-stays free of the AWS SDK; the Phase C API constructs the real handle.
-"""
+"""Global daily spend cap across every query, on top of the harness per-query cap. The running
+total is a DynamoDB atomic counter keyed per UTC day, so concurrent Lambdas share one number.
+Fail-closed: any counter error denies the request rather than spend unverified. The table is
+injected so atlas_core stays free of the AWS SDK."""
 
 import logging
 from datetime import UTC, datetime

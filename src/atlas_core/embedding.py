@@ -1,9 +1,5 @@
-"""The embedding contract everything downstream depends on.
-
-Changing the model, dimension, or input format is a contract version bump and means a full
-re-index. The ONNX INT8 backend for Lambda query-time use is added in Phase C; ingestion uses
-sentence-transformers on free CPU.
-"""
+"""The frozen embedding contract everything downstream depends on: model, dimension, input
+format. Changing any of them is a version bump and forces a full re-index."""
 
 from dataclasses import dataclass
 from typing import Protocol

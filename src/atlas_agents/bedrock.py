@@ -1,10 +1,5 @@
-"""Bedrock client: model tiering, throttle degradation, structured-output repair.
-
-Haiku handles mechanical steps (reranking, extraction); Sonnet is reserved for
-synthesis. The anthropic SDK already retries 429/5xx with exponential backoff and
-jitter; when retries are exhausted on Sonnet we degrade to Haiku once instead of
-failing the whole query (plan risk table: Bedrock throttling).
-"""
+"""Bedrock client with model tiering, one-shot Sonnet-to-Haiku degradation when throttling
+outlasts the SDK's retries, and structured-output repair."""
 
 import logging
 import os

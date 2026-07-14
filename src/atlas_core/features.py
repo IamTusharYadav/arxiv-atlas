@@ -1,9 +1,5 @@
-"""Text normalization for embedding input.
-
-Stored titles and abstracts keep their original (whitespace-collapsed) form for display;
-this module produces the de-noised variant that goes into the embedding model, where LaTeX
-markup and math would otherwise poison similarity.
-"""
+"""De-noise text for embedding input: strip LaTeX markup and math that would otherwise poison
+similarity. Stored titles and abstracts keep their original form for display."""
 
 import re
 import unicodedata

@@ -1,11 +1,6 @@
-"""Langfuse tracing for agent runs: one trace per question, one span per loop step tagged
-with token counts, cost, and the prompt registry version (plan section I).
-
-Tracing is fire-and-forget. It never blocks a request and never fails one: without Langfuse
-credentials it is a no-op, every SDK call is wrapped so an outage cannot raise into the loop,
-and the end-of-run flush is bounded to `FLUSH_TIMEOUT_S` so a slow collector cannot stall the
-response. Correctness of the answer never depends on the trace being delivered.
-"""
+"""Langfuse tracing: one trace per question, one span per loop step (token counts, cost,
+prompt version). Fire-and-forget and fail-open, so no trace error or slow collector can block
+or break a request, and missing credentials disable it entirely."""
 
 import logging
 import os

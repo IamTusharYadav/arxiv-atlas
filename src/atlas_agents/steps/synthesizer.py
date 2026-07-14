@@ -1,9 +1,5 @@
-"""Synthesizer step: the one Sonnet call, turning extracted claims into a cited brief.
-
-Citations are validated against the evidence after the call: an id the model invents
-gets one repair round trip, then the run fails rather than ship a hallucinated
-citation (the eval rubric penalizes those hardest).
-"""
+"""The one Sonnet call: turn extracted claims into a cited brief. Invented citations get one
+repair round trip, then the run fails rather than ship a hallucinated id."""
 
 import re
 

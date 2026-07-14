@@ -1,10 +1,6 @@
-"""Generic agent loop: iteration cap, per-query budget cap, per-step trace.
-
-No framework (ADR 0002): the loop is a plain function-call cycle. Concrete steps
-(planner, retriever, reranker, extractor, synthesizer) arrive in later commits; the
-harness owns only termination, budget accounting, and the trace that ships with
-every answer.
-"""
+"""Generic agent loop: iteration cap, per-query budget cap, per-step trace. Framework-free by
+ADR 0002 (a plain function-call cycle); it owns termination and budget accounting, not the
+steps themselves."""
 
 import logging
 from collections.abc import Callable

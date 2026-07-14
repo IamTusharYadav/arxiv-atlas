@@ -1,10 +1,6 @@
-"""Prompt-injection fixtures for untrusted abstracts (plan risk 5).
-
-Model behaviour under injection is scored live by the injection-in-abstracts golden query.
-These credential-free fixtures pin the two structural defenses that a prompt edit could
-silently break: abstract text cannot forge the <paper> delimiter to break out of its data
-block, and the steps that feed untrusted text to the model tell it that text is data.
-"""
+"""Injection fixtures: an untrusted abstract must stay inside its data block and not be read
+as instructions. Live model behaviour is scored by the injection-in-abstracts golden query;
+these just pin the structural defenses a prompt edit could quietly break."""
 
 import json
 

@@ -1,14 +1,8 @@
-"""Semantic response cache: serve a stored brief when a new question is near-identical
-to one already answered, so repeats and light paraphrases never reach Bedrock (plan
-cost engineering, risk 1).
-
-Match is by query-embedding similarity, not string equality: the embeddings are already
-L2-normalized (embedding contract), so cosine is a plain dot product and the floor is
-high because serving the wrong cached brief for a genuinely different question is worse
-than a miss. The cache fails open in both directions: a lookup or write error costs a
-Bedrock call, never a denied request. The store is injected (a DynamoDB-backed index in
-the API path, a fake in tests) so atlas_core stays SDK-free.
-"""
+"""Serve a stored brief when a new question is near-identical to one already answered, so
+repeats and light paraphrases skip Bedrock. Matches on query-embedding cosine, not string
+equality; the floor is high because a wrong cache hit is worse than a miss. Fails open both
+ways (an error costs a Bedrock call, never a denied request) and takes an injected store so
+atlas_core stays SDK-free."""
 
 import logging
 from dataclasses import dataclass

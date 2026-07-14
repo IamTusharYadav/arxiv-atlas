@@ -1,8 +1,5 @@
-"""Retrieval tool: vector search over the corpus for each planned subquery.
-
-No model call; the only cost is a Qdrant round trip per subquery. Candidates from
-all subqueries are merged and deduplicated, keeping each paper's best score.
-"""
+"""Vector search over the corpus for each subquery; no model call. Candidates are merged
+across subqueries, keeping each paper's best score."""
 
 from atlas_agents.harness import RunContext
 from atlas_core.embedding import QUERY_PREFIX, Embedder

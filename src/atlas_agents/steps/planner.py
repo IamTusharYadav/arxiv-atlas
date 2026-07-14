@@ -1,9 +1,6 @@
-"""Planner step: decompose the question into search queries and a stop criterion.
-
-Runs on Haiku; planning is mechanical decomposition, not synthesis. The stop
-criterion is what the loop checks after each retrieval round to decide whether
-to search again or hand off to the synthesizer.
-"""
+"""Decompose the question into subqueries and a stop criterion (Haiku; this is mechanical
+decomposition, not synthesis). The loop checks the stop criterion after each retrieval
+round."""
 
 from pydantic import BaseModel, model_validator
 

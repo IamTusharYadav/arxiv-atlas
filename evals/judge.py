@@ -1,10 +1,7 @@
-"""LLM-as-judge: score one agent answer against its golden query on a rubric-anchored 1-5
-scale (plan section G). The judge sees only the question, the answer, and the cited papers'
-abstracts, so it scores grounding rather than its own world knowledge.
-
-Runs on Haiku at temperature 0 for reproducibility; `samples>1` takes the per-dimension
-median across independent judgments to damp the residual nondeterminism on borderline answers.
-"""
+"""Score one agent answer against its golden query on a 1-5 rubric. The judge sees only the
+question, answer, and cited abstracts, so it scores grounding, not its own world knowledge.
+Haiku at temperature 0; samples>1 takes the per-dimension median to damp the nondeterminism on
+borderline answers."""
 
 import statistics
 from dataclasses import dataclass

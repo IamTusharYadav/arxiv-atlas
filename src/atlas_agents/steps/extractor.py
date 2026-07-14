@@ -1,8 +1,5 @@
-"""Extractor step: per-paper key claims relevant to the question, one batched Haiku call.
-
-The claims are the synthesizer's working material; sending compressed claims instead
-of full abstracts is what keeps the Sonnet synthesis call cheap.
-"""
+"""Extractor: one batched Haiku call pulls each paper's key claims. Handing the synthesizer
+claims instead of full abstracts keeps the Sonnet call cheap."""
 
 from pydantic import BaseModel
 

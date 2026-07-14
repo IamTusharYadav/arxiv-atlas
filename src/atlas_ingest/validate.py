@@ -1,8 +1,6 @@
-"""Validation gates between fetch and upsert.
-
-Per-paper gates quarantine individual records; the run-level gate fails the whole run
-loudly when the reject ratio suggests upstream schema drift rather than bad papers.
-"""
+"""Validation gates between fetch and upsert. Per-paper gates quarantine bad records; the
+run-level gate fails loudly when the reject ratio points to upstream schema drift rather than
+a few bad papers."""
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta

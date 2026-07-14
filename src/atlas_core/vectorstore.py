@@ -37,6 +37,8 @@ class VectorStore(Protocol):
 
     def search(self, vector: Sequence[float], limit: int) -> list[ScoredPaper]: ...
 
+    def get(self, arxiv_ids: Sequence[str]) -> list[StoredPaper]: ...
+
     def set_edges(self, arxiv_id: str, edges: Sequence[Edge]) -> None: ...
 
     def iter_papers(self) -> Iterator[StoredPaper]: ...
@@ -95,6 +97,14 @@ class QdrantStore:
             if p.payload is not None
         ]
 
+    def get(self, arxiv_ids: Sequence[str]) -> list[StoredPaper]:
+        """Papers and their edges by id, for the graph route. Missing ids are simply absent
+        from the result; order is not guaranteed."""
+        points = self._client.retrieve(
+            self._collection, ids=[point_id(a) for a in arxiv_ids], with_payload=True
+        )
+        return [_stored_from_payload(p.payload) for p in points if p.payload is not None]
+
     def set_edges(self, arxiv_id: str, edges: Sequence[Edge]) -> None:
         self._client.set_payload(
             self._collection,
@@ -110,14 +120,8 @@ class QdrantStore:
                 self._collection, limit=512, offset=offset, with_payload=True, with_vectors=False
             )
             for point in points:
-                if point.payload is None:
-                    continue
-                paper = _paper_from_payload(point.payload)
-                edges = [
-                    Edge(source=paper.arxiv_id, target=e["target"], weight=e["weight"])
-                    for e in point.payload.get("edges", [])
-                ]
-                yield StoredPaper(paper=paper, edges=edges)
+                if point.payload is not None:
+                    yield _stored_from_payload(point.payload)
             if offset is None:
                 return
 
@@ -135,3 +139,12 @@ class QdrantStore:
 
 def _paper_from_payload(payload: dict[str, Any]) -> Paper:
     return Paper.model_validate(payload)
+
+
+def _stored_from_payload(payload: dict[str, Any]) -> StoredPaper:
+    paper = _paper_from_payload(payload)
+    edges = [
+        Edge(source=paper.arxiv_id, target=e["target"], weight=e["weight"])
+        for e in payload.get("edges", [])
+    ]
+    return StoredPaper(paper=paper, edges=edges)

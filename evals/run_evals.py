@@ -1,13 +1,10 @@
-"""Eval runner CLI: answer each golden query with the live agent, judge it, and compare the
-aggregate against the stored baseline.
+"""Eval runner CLI: answer each golden query, judge it, and compare the aggregate to the stored
+baseline. Exits non-zero on a gated regression so CI can block a merge. Needs live Bedrock and
+a populated Qdrant.
 
     uv run python -m evals.run_evals --subset 15      # PR smoke gate
     uv run python -m evals.run_evals --full           # nightly
     uv run python -m evals.run_evals --full --update-baseline   # re-baseline after review
-
-Exits non-zero when a gated dimension regresses, so CI can gate a merge on it. Needs live
-Bedrock and a populated Qdrant (the `agents` and `ingest` extras); it is glue, not covered by
-unit tests, which exercise the judge and comparison with fakes.
 """
 
 import argparse

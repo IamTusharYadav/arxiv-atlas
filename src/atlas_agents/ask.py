@@ -1,10 +1,7 @@
-"""ask(): the five steps wired into the harness loop.
-
-One iteration = one evidence round: retrieve, rerank, extract, then a cheap Haiku
-check of the evidence against the planner's stop criterion. Insufficient evidence
-refines the subqueries and loops; sufficient evidence hands off to the synthesizer.
-Out-of-scope questions and empty corpora decline without spending Sonnet tokens.
-"""
+"""Wires the five steps into the harness loop. One iteration is one evidence round: retrieve,
+rerank, extract, then a Haiku check of the evidence against the stop criterion. Insufficient
+evidence refines the subqueries and loops; out-of-scope or empty-corpus questions decline
+before reaching Sonnet."""
 
 from dataclasses import dataclass, field
 
