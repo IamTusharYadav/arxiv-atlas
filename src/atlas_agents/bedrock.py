@@ -50,10 +50,34 @@ class Completion:
     cost_usd: float
 
 
+# Bedrock structured outputs reject JSON-schema constraint keywords beyond the core type
+# system (e.g. integer minimum/maximum). Pydantic still enforces these on
+# model_validate_json, so stripping them from the wire schema is safe: an out-of-range
+# value fails validation client-side and triggers the existing repair round trip.
+_UNSUPPORTED_KEYS = frozenset(
+    {
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+        "minLength",
+        "maxLength",
+        "pattern",
+        "minItems",
+        "maxItems",
+        "uniqueItems",
+    }
+)
+
+
 def _strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    """Structured outputs require additionalProperties: false on every object node."""
+    """Add additionalProperties:false on every object node and drop constraint keywords
+    Bedrock structured outputs reject (Pydantic re-checks them client-side)."""
     if schema.get("type") == "object":
         schema.setdefault("additionalProperties", False)
+    for key in _UNSUPPORTED_KEYS & schema.keys():
+        del schema[key]
     for value in schema.values():
         if isinstance(value, dict):
             _strict_schema(value)

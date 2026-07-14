@@ -3,7 +3,7 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
-from atlas_agents.bedrock import HAIKU, SONNET, StructuredOutputError
+from atlas_agents.bedrock import HAIKU, SONNET, StructuredOutputError, _strict_schema
 from atlas_core.costs import usd
 from tests.conftest import make_bedrock_client as make_client
 from tests.conftest import make_message
@@ -13,6 +13,22 @@ def throttled() -> anthropic.RateLimitError:
     request = httpx.Request("POST", "https://bedrock.test/messages")
     response = httpx.Response(429, request=request)
     return anthropic.RateLimitError("throttled", response=response, body=None)
+
+
+def test_strict_schema_strips_constraints_bedrock_rejects() -> None:
+    # Bedrock structured outputs 400 on integer minimum/maximum (and similar); the schema
+    # sent over the wire must drop them, while additionalProperties:false is added.
+    from pydantic import Field
+
+    class Ranking(BaseModel):
+        score: int = Field(ge=0, le=10)
+        tags: list[str] = Field(max_length=3)
+
+    schema = _strict_schema(Ranking.model_json_schema())
+    score = schema["properties"]["score"]
+    assert "minimum" not in score and "maximum" not in score
+    assert "maxItems" not in schema["properties"]["tags"]
+    assert schema["additionalProperties"] is False
 
 
 class Answer(BaseModel):
