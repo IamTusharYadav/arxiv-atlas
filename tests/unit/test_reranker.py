@@ -1,6 +1,8 @@
 import json
 
 from atlas_agents.harness import RunContext
+from atlas_agents.steps.extractor import _ABSTRACT_CHARS as EXTRACTOR_CHARS
+from atlas_agents.steps.reranker import _ABSTRACT_CHARS as RERANK_CHARS
 from atlas_agents.steps.reranker import rerank
 from atlas_core.vectorstore import ScoredPaper
 from tests.conftest import make_bedrock_client, make_message, make_paper
@@ -44,6 +46,18 @@ def test_rerank_caps_at_keep() -> None:
     client, _ = make_bedrock_client([make_message(scores_json(dict.fromkeys(ids, 8)))])
     kept = rerank(client, RunContext(), "q", candidates(*ids), keep=8)
     assert len(kept) == 8
+
+
+def test_rerank_sends_only_the_abstract_lead() -> None:
+    # Perf lever (commit 31): reranking reads a trimmed lead, not the whole abstract, and a
+    # strictly smaller window than the extractor. Guards against silently restoring the cost.
+    assert RERANK_CHARS <= EXTRACTOR_CHARS // 2
+    abstract = "LEAD_MARKER " + "x" * 2000 + " TAIL_MARKER"
+    client, fake = make_bedrock_client([make_message(scores_json({"2607.00001": 7}))])
+    rerank(client, RunContext(), "q", [ScoredPaper(paper=make_paper(abstract=abstract), score=0.7)])
+    prompt = fake.calls[0]["messages"][0]["content"]  # type: ignore[index]
+    assert "LEAD_MARKER" in prompt
+    assert "TAIL_MARKER" not in prompt  # tail past the window never reaches the model
 
 
 def test_rerank_empty_candidates_skips_model_call() -> None:

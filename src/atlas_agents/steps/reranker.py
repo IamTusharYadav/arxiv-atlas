@@ -1,8 +1,10 @@
 """Reranker step: Haiku scores all candidates against the question in one batch call.
 
 Vector similarity finds papers that talk about the same things; the reranker judges
-which of them actually answer the question. One batched call instead of one per
-paper is the main token-cost lever at this step.
+which of them actually answer the question. One batched call instead of one per paper
+is the first token lever; the second is reading only the abstract lead, since a coarse
+relevance score over vector-prefiltered candidates does not need the whole abstract
+(the extractor gets the fuller window for precise claims).
 """
 
 from pydantic import BaseModel, Field
@@ -15,7 +17,13 @@ from atlas_core.vectorstore import ScoredPaper
 
 KEEP = 8
 SCORE_FLOOR = 5
-_ABSTRACT_CHARS = 1000
+# Abstract lead sent per candidate. Half the extractor's window: reranking scores coarse
+# relevance over candidates the retriever already vector-prefiltered, so the lead carries
+# the problem and contribution. Candidate count grows each round, so this is the step's
+# dominant input cost; trimming it from 1000 is the ~40 percent cut.
+# ponytail: 500-char lead. Watch the reranker relevance dimension in evals; push lower only
+# if it holds, restore toward 1000 if it drops.
+_ABSTRACT_CHARS = 500
 
 
 class CandidateScore(BaseModel):
