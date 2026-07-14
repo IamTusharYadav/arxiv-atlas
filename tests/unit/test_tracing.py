@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 import atlas_agents.tracing as tracing
+from atlas_agents.bedrock import HAIKU
 from atlas_agents.harness import StepRecord
 from atlas_agents.tracing import _bounded_flush, _LangfuseSink, query_trace
 
@@ -30,7 +31,7 @@ class _FakeRoot:
 def test_sink_emits_generation_with_version_and_usage() -> None:
     root = _FakeRoot()
     rec = StepRecord("planner", "2 subqueries", input_tokens=100, output_tokens=50, cost_usd=0.001)
-    _LangfuseSink(root).step(rec, model="anthropic.claude-haiku-4-5", version="1.0.0")
+    _LangfuseSink(root).step(rec, model=HAIKU, version="1.0.0")
 
     call = root.calls[0]
     assert call["name"] == "planner"

@@ -7,6 +7,7 @@ failing the whole query (plan risk table: Bedrock throttling).
 """
 
 import logging
+import os
 from dataclasses import dataclass, replace
 from typing import Any, TypeVar
 
@@ -18,8 +19,12 @@ from atlas_core.costs import usd
 
 log = logging.getLogger(__name__)
 
-HAIKU = "anthropic.claude-haiku-4-5"
-SONNET = "anthropic.claude-sonnet-5"
+# Newer Claude models on Bedrock are inference-profile-only (bare on-demand ids 400),
+# and this account is not entitled to the bedrock-mantle endpoint, so we use the native
+# InvokeModel client (AnthropicBedrock) with us-region inference-profile ids. Sonnet 5 is
+# gated for this account (AWS Sales approval); Sonnet 4.6 is the working stand-in.
+HAIKU = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+SONNET = "us.anthropic.claude-sonnet-4-6"
 
 _DEGRADE = {SONNET: HAIKU}
 
@@ -62,10 +67,13 @@ def _strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
 class BedrockClient:
     def __init__(
         self,
-        region: str = "us-east-1",
-        client: anthropic.AnthropicBedrockMantle | None = None,
+        region: str | None = None,
+        client: anthropic.AnthropicBedrock | None = None,
     ) -> None:
-        self._client = client or anthropic.AnthropicBedrockMantle(aws_region=region)
+        # Explicit arg wins; otherwise honor AWS_REGION so .env can pick the Bedrock
+        # region (the SDK would otherwise not see it once we pass aws_region).
+        region = region or os.environ.get("AWS_REGION") or "us-east-1"
+        self._client = client or anthropic.AnthropicBedrock(aws_region=region)
 
     def complete(
         self, *, model: str, system: str, prompt: str, max_tokens: int = 1024

@@ -4,11 +4,13 @@ Run: uv run python scripts/smoke_bedrock.py [region]
 Needs AWS credentials (env or ~/.aws/credentials) with bedrock:InvokeModel.
 """
 
+import os
 import sys
 
 from pydantic import BaseModel
 
 from atlas_agents.bedrock import HAIKU, SONNET, BedrockClient
+from atlas_core.config import load_dotenv
 
 
 class Capital(BaseModel):
@@ -17,10 +19,11 @@ class Capital(BaseModel):
 
 
 def main() -> None:
-    region = sys.argv[1] if len(sys.argv) > 1 else "us-east-1"
+    load_dotenv()
+    region = sys.argv[1] if len(sys.argv) > 1 else None
     client = BedrockClient(region=region)
 
-    print(f"region: {region}")
+    print(f"region: {region or os.environ.get('AWS_REGION') or 'us-east-1'}")
 
     haiku = client.complete(
         model=HAIKU, system="Answer in one word.", prompt="Say ok.", max_tokens=20

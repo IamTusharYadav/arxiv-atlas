@@ -1,13 +1,13 @@
 """Token to USD accounting for the Bedrock models we call.
 
 Prices are USD per million tokens, checked against Anthropic pricing on 2026-07-12;
-re-verify when adding a model. Sonnet 5 has an introductory discount until 2026-08-31;
-we encode sticker prices so budget math stays conservative.
+re-verify when adding a model. Keyed by the us-region inference-profile ids we invoke
+(bare on-demand ids are not accepted for these models on Bedrock).
 """
 
 _PER_MTOK: dict[str, tuple[float, float]] = {
-    "anthropic.claude-haiku-4-5": (1.00, 5.00),
-    "anthropic.claude-sonnet-5": (3.00, 15.00),
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0": (1.00, 5.00),
+    "us.anthropic.claude-sonnet-4-6": (3.00, 15.00),
 }
 
 # Cache pricing multipliers relative to the input price.

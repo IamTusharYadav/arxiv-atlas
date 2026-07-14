@@ -1,6 +1,6 @@
 id: judge
 version: 1.0.0
-model: anthropic.claude-haiku-4-5
+model: us.anthropic.claude-haiku-4-5-20251001-v1:0
 changelog:
   - "1.0.0: initial rubric-anchored judge for the golden-set eval runner"
 system: |-

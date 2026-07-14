@@ -9,7 +9,7 @@ import pytest
 from anthropic.types import Message, TextBlock, Usage
 from qdrant_client import QdrantClient
 
-from atlas_agents.bedrock import BedrockClient
+from atlas_agents.bedrock import HAIKU, BedrockClient
 from atlas_core.embedding import CONTRACT
 from atlas_core.models import Paper
 from atlas_core.vectorstore import QdrantStore
@@ -66,7 +66,7 @@ def fake_embedder() -> FakeEmbedder:
 
 def make_message(
     text: str,
-    model: str = "anthropic.claude-haiku-4-5",
+    model: str = HAIKU,
     input_tokens: int = 100,
     output_tokens: int = 50,
     stop_reason: str = "end_turn",
@@ -102,7 +102,7 @@ def make_bedrock_client(
     outcomes: list[Message | Exception],
 ) -> tuple[BedrockClient, FakeMessages]:
     fake = FakeMessages(outcomes)
-    inner = anthropic.AnthropicBedrockMantle(
+    inner = anthropic.AnthropicBedrock(
         aws_region="us-east-1", aws_access_key="test", aws_secret_key="test"
     )
     inner.messages = fake  # type: ignore[assignment]
