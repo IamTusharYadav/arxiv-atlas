@@ -43,3 +43,12 @@ def test_fails_closed_when_backend_unavailable() -> None:
     guard = DailyBudgetGuard(table)
     with pytest.raises(DailyBudgetExceeded):
         guard.check()
+
+
+def test_charge_swallows_backend_error() -> None:
+    # The money is already spent when charge() runs; a backend blip must not fail the
+    # finished answer (or mask the original error on the abort path). check() still gates.
+    table = _FakeTable()
+    table.fail = True
+    guard = DailyBudgetGuard(table)
+    assert guard.charge(0.05) == 0.0

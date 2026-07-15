@@ -1,4 +1,5 @@
 from dataclasses import replace
+from time import time
 from typing import Any
 
 from anthropic.types import Message
@@ -166,14 +167,26 @@ def test_rate_limit_returns_429_with_retry_after(
     memory_store: QdrantStore, fake_embedder: FakeEmbedder
 ) -> None:
     seed(memory_store, fake_embedder)
-    # burst=1: the first request spends the only token, the second is throttled. TestClient
-    # sends no X-Forwarded-For, so every request shares one bucket.
+    # burst=1: the first request spends the only token, the second is throttled. TestClient's
+    # client address is constant, so every request shares one bucket.
     limiter = RateLimiter(MemoryBuckets(), rate_per_s=1 / 6, burst=1)
     api = client_for(memory_store, [], limiter=limiter)
     assert api.get("/api/status").status_code == 200
     resp = api.get("/api/status")
     assert resp.status_code == 429
     assert int(resp.headers["Retry-After"]) > 0
+
+
+def test_rate_limit_ignores_spoofed_forwarded_header(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    # Behind API Gateway the first X-Forwarded-For hop is attacker-chosen, so rotating it must
+    # not mint a fresh bucket per request; the unforgeable source address keys the bucket.
+    limiter = RateLimiter(MemoryBuckets(), rate_per_s=1 / 6, burst=1)
+    api = client_for(memory_store, [], limiter=limiter)
+    assert api.get("/api/status", headers={"x-forwarded-for": "1.1.1.1"}).status_code == 200
+    assert api.get("/api/status", headers={"x-forwarded-for": "2.2.2.2"}).status_code == 429
 
 
 def test_query_over_budget_returns_503(
@@ -210,6 +223,21 @@ def test_query_cache_hit_skips_bedrock(
     body = second.json()
     assert body["cached"] is True
     assert body["brief"] == brief_md
+
+
+def test_aborted_run_still_charges_daily_budget(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    # The planner call alone blows the per-query cap; that spend was real, so the daily
+    # counter must see it even though the run aborted.
+    table = _FakeTable()
+    guard = DailyBudgetGuard(table, daily_cap_usd=50.0)
+    api = client_for(
+        memory_store, [make_message(plan_json(), output_tokens=5_000_000)], budget=guard
+    )
+    assert api.post("/api/query", json={"question": "kv cache?"}).status_code == 503
+    assert float(table.spent) > 20  # ~5M output tokens of Haiku, charged despite the abort
 
 
 def test_query_over_daily_budget_returns_503(
@@ -289,6 +317,26 @@ def test_async_query_job_records_error(
     assert body["status"] == "error"
     assert body["result"] is None
     assert body["error"]
+
+
+def test_query_status_reports_dead_worker_after_silence(memory_store: QdrantStore) -> None:
+    jobs = MemoryJobStore()
+    job_id = jobs.create("q")
+    # A worker that hard-crashed through its retry never writes a terminal status; the route
+    # reports it dead once silence exceeds a whole worker lifetime.
+    jobs._jobs[job_id] = replace(jobs._jobs[job_id], status="running", updated_at=time() - 901)
+    api = async_client(memory_store, [], jobs)
+    body = api.get(f"/api/query/{job_id}").json()
+    assert body["status"] == "error"
+    assert "worker" in body["error"]
+
+
+def test_query_status_recent_running_job_stays_running(memory_store: QdrantStore) -> None:
+    jobs = MemoryJobStore()
+    job_id = jobs.create("q")
+    jobs._jobs[job_id] = replace(jobs._jobs[job_id], status="running", updated_at=time() - 30)
+    api = async_client(memory_store, [], jobs)
+    assert api.get(f"/api/query/{job_id}").json()["status"] == "running"
 
 
 def test_query_status_unknown_job_404(memory_store: QdrantStore) -> None:

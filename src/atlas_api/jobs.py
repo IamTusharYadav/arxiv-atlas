@@ -10,6 +10,9 @@ class Job:
     result: dict[str, Any] | None
     error: str | None
     progress: list[dict[str, str]] = field(default_factory=list)
+    # Epoch seconds of the last store write; the API uses it to spot dead workers. None on
+    # stores that predate the field.
+    updated_at: float | None = None
 
 
 class JobStore(Protocol):

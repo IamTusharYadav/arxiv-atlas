@@ -89,6 +89,7 @@ class DynamoJobStore:
                 "pk": job_id,
                 "status": "pending",
                 "question": question,
+                "updated_at": Decimal(int(time())),
                 "expires_at": Decimal(int(time()) + _JOB_TTL_S),
             }
         )
@@ -101,6 +102,7 @@ class DynamoJobStore:
         result = item.get("result")
         error = item.get("error")
         progress = item.get("progress")
+        updated_at = item.get("updated_at")
         return Job(
             id=job_id,
             status=str(item["status"]),
@@ -108,6 +110,7 @@ class DynamoJobStore:
             result=json.loads(result) if result else None,
             error=str(error) if error else None,
             progress=json.loads(progress) if progress else [],
+            updated_at=float(updated_at) if updated_at is not None else None,
         )
 
     def mark_running(self, job_id: str) -> None:
@@ -129,6 +132,8 @@ class DynamoJobStore:
         if item is None:
             return
         item.update(changes)
+        # Every write is a liveness signal; the API treats long silence as a dead worker.
+        item["updated_at"] = Decimal(int(time()))
         self._table.put_item(Item=item)
 
 

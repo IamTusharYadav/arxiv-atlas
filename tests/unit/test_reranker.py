@@ -3,7 +3,7 @@ import json
 from atlas_agents.harness import RunContext
 from atlas_agents.steps.extractor import _ABSTRACT_CHARS as EXTRACTOR_CHARS
 from atlas_agents.steps.reranker import _ABSTRACT_CHARS as RERANK_CHARS
-from atlas_agents.steps.reranker import rerank
+from atlas_agents.steps.reranker import MAX_CANDIDATES, rerank
 from atlas_core.vectorstore import ScoredPaper
 from tests.conftest import make_bedrock_client, make_message, make_paper
 
@@ -58,6 +58,17 @@ def test_rerank_sends_only_the_abstract_lead() -> None:
     prompt = fake.calls[0]["messages"][0]["content"]  # type: ignore[index]
     assert "LEAD_MARKER" in prompt
     assert "TAIL_MARKER" not in prompt  # tail past the window never reaches the model
+
+
+def test_rerank_caps_candidates_fed_to_the_model() -> None:
+    # Late loop rounds widen retrieval past what the response token ceiling can score;
+    # the cap keeps the best-first head so the output always fits max_tokens.
+    ids = [f"2607.{i:05d}" for i in range(MAX_CANDIDATES + 15)]
+    client, fake = make_bedrock_client([make_message(scores_json({ids[0]: 8}))])
+    kept = rerank(client, RunContext(), "q", candidates(*ids))
+    prompt = fake.calls[0]["messages"][0]["content"]  # type: ignore[index]
+    assert prompt.count("<paper id=") == MAX_CANDIDATES
+    assert [s.paper.arxiv_id for s in kept] == [ids[0]]
 
 
 def test_rerank_empty_candidates_skips_model_call() -> None:

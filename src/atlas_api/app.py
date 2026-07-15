@@ -1,15 +1,15 @@
 import hashlib
 import logging
 from collections.abc import Awaitable, Callable
+from time import time
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from atlas_agents.ask import ask
-from atlas_agents.bedrock import BedrockClient
-from atlas_agents.harness import BudgetExceeded, IterationsExhausted, StepRecord, StepSink
-from atlas_agents.steps.synthesizer import UngroundedCitations
+from atlas_agents.bedrock import BedrockClient, StructuredOutputError
+from atlas_agents.harness import AgentError, StepRecord, StepSink
 from atlas_api.jobs import JobStore
 from atlas_core.budget import DailyBudgetExceeded, DailyBudgetGuard
 from atlas_core.cache import ResponseCache
@@ -18,6 +18,11 @@ from atlas_core.ratelimit import RateLimiter
 from atlas_core.vectorstore import VectorStore
 
 log = logging.getLogger(__name__)
+
+# The async worker's own Lambda timeout: a job silent this long made zero progress through a
+# full worker lifetime (progress writes bump updated_at every step, and the crash-retry's
+# mark_running bumps it again), so it is dead, not slow.
+STALE_JOB_S = 900
 
 
 class QueryRequest(BaseModel):
@@ -85,15 +90,16 @@ class StatusResponse(BaseModel):
 
 
 def _client_key(request: Request) -> str:
-    # Behind API Gateway the caller is the first X-Forwarded-For hop; hash it so raw IPs never
-    # reach the bucket store or logs.
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        ip = forwarded.split(",")[0].strip()
-    elif request.client is not None:
+    # Mangum fills request.client from API Gateway's requestContext sourceIp, which the caller
+    # cannot forge. X-Forwarded-For is caller-influenced (API Gateway appends the real IP to
+    # whatever the client sent, so its first hop is attacker-chosen and would mint a fresh
+    # bucket per request); it is only a fallback for when there is no client at all. The IP is
+    # hashed so raw addresses never reach the bucket store or logs.
+    if request.client is not None:
         ip = request.client.host
     else:
-        ip = "unknown"
+        forwarded = request.headers.get("x-forwarded-for")
+        ip = forwarded.split(",")[0].strip() if forwarded else "unknown"
     return hashlib.sha256(ip.encode()).hexdigest()
 
 
@@ -122,7 +128,14 @@ def _answer(
     budget: DailyBudgetGuard | None,
     sink: StepSink | None = None,
 ) -> QueryResponse:
-    answer = ask(question, client=client, store=store, embedder=embedder, sink=sink)
+    try:
+        answer = ask(question, client=client, store=store, embedder=embedder, sink=sink)
+    except AgentError as exc:
+        # An aborted run still spent real money; charge it so the daily counter stays honest.
+        # charge() swallows backend errors, so this can never mask the original failure.
+        if budget is not None:
+            budget.charge(exc.spent_usd)
+        raise
     response = QueryResponse(
         brief=answer.brief,
         papers=[
@@ -171,7 +184,7 @@ def run_job(
             budget=budget,
             sink=_JobProgressSink(jobs, job_id),
         )
-    except (BudgetExceeded, IterationsExhausted, UngroundedCitations) as exc:
+    except (AgentError, StructuredOutputError) as exc:
         jobs.fail(job_id, str(exc))
         return
     except Exception:
@@ -234,7 +247,7 @@ def create_app(
                     cache=cache,
                     budget=budget,
                 )
-            except (BudgetExceeded, IterationsExhausted, UngroundedCitations) as exc:
+            except (AgentError, StructuredOutputError) as exc:
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
         # The real loop outruns API Gateway's 30s limit, so run it in a background invocation and
         # hand back a job id to poll.
@@ -256,6 +269,22 @@ def create_app(
         job = jobs.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail=f"job {job_id} not found")
+        # A worker that hard-crashed through its retry never writes a terminal status, which
+        # would leave pollers on an eternal spinner until the row's TTL. The worker bumps
+        # updated_at on every step, so silence longer than one whole worker lifetime (the
+        # Lambda 900s ceiling) means it is dead. Read-only verdict: every poll computes the
+        # same answer, and GETs never write.
+        if (
+            job.status in ("pending", "running")
+            and job.updated_at is not None
+            and time() - job.updated_at > STALE_JOB_S
+        ):
+            return QueryStatus(
+                job_id=job.id,
+                status="error",
+                progress=job.progress,
+                error="the query worker stopped responding; retry the question",
+            )
         result = QueryResponse.model_validate(job.result) if job.result is not None else None
         return QueryStatus(
             job_id=job.id,

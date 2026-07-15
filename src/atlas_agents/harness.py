@@ -12,11 +12,20 @@ MAX_ITERS = 6
 BUDGET_USD = 0.12
 
 
-class BudgetExceeded(RuntimeError):
+class AgentError(RuntimeError):
+    """Terminal loop failure. Carries the run's actual spend so callers can still charge
+    the daily budget counter for an aborted run; the money went out either way."""
+
+    def __init__(self, message: str, *, spent_usd: float = 0.0) -> None:
+        super().__init__(message)
+        self.spent_usd = spent_usd
+
+
+class BudgetExceeded(AgentError):
     """The query crossed its per-query spend cap; the run aborts rather than overspend."""
 
 
-class IterationsExhausted(RuntimeError):
+class IterationsExhausted(AgentError):
     """The task never produced an answer within the iteration cap (a stalled loop)."""
 
 
@@ -88,7 +97,8 @@ class RunContext:
         if self.spent_usd > self.budget_usd:
             raise BudgetExceeded(
                 f"query spend ${self.spent_usd:.4f} exceeds cap ${self.budget_usd:.2f} "
-                f"at step {step!r}"
+                f"at step {step!r}",
+                spent_usd=self.spent_usd,
             )
 
 
@@ -116,4 +126,4 @@ def run_loop[T](
                 ctx.spent_usd,
             )
             return result, ctx
-    raise IterationsExhausted(f"no answer after {max_iters} iterations")
+    raise IterationsExhausted(f"no answer after {max_iters} iterations", spent_usd=ctx.spent_usd)

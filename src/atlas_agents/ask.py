@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from atlas_agents.bedrock import BedrockClient
 from atlas_agents.harness import BUDGET_USD, MAX_ITERS, RunContext, StepRecord, StepSink, run_loop
 from atlas_agents.prompts import CHECK
+from atlas_agents.steps.evidence import neutralize
 from atlas_agents.steps.extractor import PaperClaims, extract
 from atlas_agents.steps.planner import MAX_SUBQUERIES, Plan, plan_query
 from atlas_agents.steps.reranker import rerank
@@ -104,7 +105,10 @@ def ask(
 def _check_evidence(
     client: BedrockClient, ctx: RunContext, stop_criterion: str, claims: list[PaperClaims]
 ) -> EvidenceCheck:
-    listing = "\n".join(f"- [{c.arxiv_id}] " + "; ".join(c.claims) for c in claims)
+    # Claims are extractor output derived from untrusted abstracts, so escape them here the
+    # same way the synthesizer's paper_block does; laundering through one model call does not
+    # make the text trusted.
+    listing = "\n".join(f"- [{c.arxiv_id}] " + neutralize("; ".join(c.claims)) for c in claims)
     check, completion = client.complete_structured(
         model=CHECK.model,
         system=CHECK.render(max_subqueries=MAX_SUBQUERIES),

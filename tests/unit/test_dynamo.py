@@ -89,6 +89,7 @@ def test_job_store_lifecycle() -> None:
     assert created is not None
     assert created.status == "pending"
     assert created.question == "what is X?"
+    assert created.updated_at is not None  # liveness stamp; the API's dead-worker check reads it
 
     store.mark_running(job_id)
     running = store.get(job_id)

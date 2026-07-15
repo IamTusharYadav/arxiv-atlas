@@ -1,7 +1,7 @@
 import re
 
 from atlas_agents.bedrock import BedrockClient
-from atlas_agents.harness import RunContext
+from atlas_agents.harness import AgentError, RunContext
 from atlas_agents.prompts import SYNTHESIZER
 from atlas_agents.steps.evidence import paper_block
 from atlas_agents.steps.extractor import PaperClaims
@@ -11,7 +11,7 @@ from atlas_core.vectorstore import ScoredPaper
 _CITATION = re.compile(r"\[([a-zA-Z.-]+/\d{7}|\d{4}\.\d{4,5})\]")
 
 
-class UngroundedCitations(RuntimeError):
+class UngroundedCitations(AgentError):
     """The brief cited ids outside the evidence even after one repair attempt."""
 
 
@@ -67,7 +67,10 @@ def synthesize(
                 model=SYNTHESIZER.model,
                 version=SYNTHESIZER.version,
             )
-            raise UngroundedCitations(f"brief cites unknown ids after repair: {sorted(invented)}")
+            raise UngroundedCitations(
+                f"brief cites unknown ids after repair: {sorted(invented)}",
+                spent_usd=ctx.spent_usd,
+            )
 
     cited = {m.group(1) for m in _CITATION.finditer(completion.text)}
     ctx.record(
