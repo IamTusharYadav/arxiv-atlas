@@ -24,12 +24,14 @@ agents = [
 ]
 # Query-time embedding backend: light enough for Lambda (onnxruntime + a fast tokenizer, no torch).
 onnx = ["onnxruntime>=1.19", "tokenizers>=0.20"]
-# The query API. Pulls agents (ask() runs on the Bedrock client) and the onnx embedder backend;
-# the Mangum/Lambda adapter joins when the deploy commit lands.
+# The query API. Pulls agents (ask() runs on the Bedrock client), the onnx embedder backend,
+# and the Lambda adapter (Mangum + boto3 for the DynamoDB guards).
 api = [
     "arxiv-atlas[agents]",
     "arxiv-atlas[onnx]",
+    "boto3>=1.34",
     "fastapi>=0.115",
+    "mangum>=0.18",
 ]
 
 [project.scripts]
@@ -73,7 +75,16 @@ strict = true
 files = ["src", "tests", "evals"]
 
 [[tool.mypy.overrides]]
-module = ["pyarrow.*", "sentence_transformers.*", "yaml", "langfuse.*", "onnxruntime", "tokenizers"]
+module = [
+    "pyarrow.*",
+    "sentence_transformers.*",
+    "yaml",
+    "langfuse.*",
+    "onnxruntime",
+    "tokenizers",
+    "boto3",
+    "mangum",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

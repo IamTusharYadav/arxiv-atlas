@@ -82,8 +82,7 @@ def dynamo_backends(
     cache_table: str,
     budget_table: str,
 ) -> tuple[RateLimiter, ResponseCache, DailyBudgetGuard]:
-    """Wire the three request-path guards to their DynamoDB tables. The budget guard already
-    speaks the raw Table interface; the bucket and cache get a translating adapter."""
+    # The budget guard already speaks the raw Table interface; the bucket and cache get an adapter.
     return (
         RateLimiter(DynamoBucketStore(resource.Table(bucket_table))),
         ResponseCache(DynamoCacheStore(resource.Table(cache_table))),
