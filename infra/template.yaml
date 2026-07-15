@@ -1,0 +1,131 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: ArXiv Atlas query API - container Lambda, HTTP API, and the DynamoDB state tables.
+
+Parameters:
+  QdrantUrl:
+    Type: String
+    Description: Qdrant Cloud endpoint URL.
+  QdrantApiKey:
+    Type: String
+    NoEcho: true
+    Description: >
+      Qdrant Cloud API key. Passed as a NoEcho parameter for a simple first deploy; move to
+      a {{resolve:ssm-secure:...}} dynamic reference to keep it out of the function config.
+  OnnxDir:
+    Type: String
+    Default: /var/task/models
+    Description: Where docker/Dockerfile.api bakes the INT8 model; read by the handler.
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 1024
+    # avx512_vnni quantization (scripts/export_onnx.py) targets x86; keep them in step.
+    Architectures:
+      - x86_64
+
+Resources:
+  # One table per request-path guard; all keyed on `pk`, all reaped by DynamoDB TTL on
+  # `expires_at`. On-demand billing so idle cost is zero.
+  BucketTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+  CacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+  BudgetTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+  Api:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # Anonymous browser client on Vercel; no cookies, so a wildcard read origin is fine.
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - content-type
+      # Coarse account-level backstop above the app's per-IP token bucket and budget guard.
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 20
+        ThrottlingRateLimit: 10
+
+  QueryFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerContext: ..
+      Dockerfile: docker/Dockerfile.api
+      DockerTag: latest
+    Properties:
+      PackageType: Image
+      Environment:
+        Variables:
+          QDRANT_URL: !Ref QdrantUrl
+          QDRANT_API_KEY: !Ref QdrantApiKey
+          ATLAS_ONNX_DIR: !Ref OnnxDir
+          ATLAS_BUCKET_TABLE: !Ref BucketTable
+          ATLAS_CACHE_TABLE: !Ref CacheTable
+          ATLAS_BUDGET_TABLE: !Ref BudgetTable
+          LOG_LEVEL: INFO
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BucketTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CacheTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BudgetTable
+        # Scope to the specific inference-profile ARNs once the account's are fixed.
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource: "*"
+      Events:
+        Proxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /{proxy+}
+            Method: ANY
+
+Outputs:
+  ApiUrl:
+    Description: Base URL of the query API.
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com"
