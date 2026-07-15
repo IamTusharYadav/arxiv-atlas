@@ -147,6 +147,9 @@ activemq-data/
 # SageMath parsed files
 *.sage.py
 
+# Exported ONNX model artifacts (built at deploy time, never committed)
+/models/
+
 # Environments
 .env
 .envrc
