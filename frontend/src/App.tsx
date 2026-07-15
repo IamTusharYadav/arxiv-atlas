@@ -8,6 +8,7 @@ import {
   type ProgressStep,
   type QueryResult,
 } from "./api";
+import GraphExplorer from "./GraphExplorer";
 
 const POLL_MS = 2500;
 // A few network blips are survivable; a run of them means the API is gone, so stop burning
@@ -24,6 +25,7 @@ export default function App() {
   const [question, setQuestion] = useState("");
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [corpusSize, setCorpusSize] = useState<number | null>(null);
+  const [exploreId, setExploreId] = useState<string | null>(null);
   // Bumped on every submit so a stale poll loop from an abandoned run stops writing state.
   const runId = useRef(0);
 
@@ -37,6 +39,7 @@ export default function App() {
     const q = question.trim();
     if (!q || phase.kind === "working") return;
     const run = ++runId.current;
+    setExploreId(null); // a new question invalidates the old neighborhood
     setPhase({ kind: "working", progress: [] });
     try {
       const outcome = await postQuery(q);
@@ -120,7 +123,9 @@ export default function App() {
         </section>
       )}
 
-      {phase.kind === "done" && <Result result={phase.result} />}
+      {phase.kind === "done" && <Result result={phase.result} onExplore={setExploreId} />}
+
+      {phase.kind === "done" && exploreId && <GraphExplorer rootId={exploreId} />}
     </main>
   );
 }
@@ -141,7 +146,13 @@ function Progress({ steps, stalled }: { steps: ProgressStep[]; stalled?: boolean
   );
 }
 
-function Result({ result }: { result: QueryResult }) {
+function Result({
+  result,
+  onExplore,
+}: {
+  result: QueryResult;
+  onExplore: (arxivId: string) => void;
+}) {
   return (
     <>
       <section className="card brief">
@@ -161,6 +172,9 @@ function Result({ result }: { result: QueryResult }) {
               </a>
               <span className="title">{p.title}</span>
               <span className="badge">{p.primary_category}</span>
+              <button className="explore" onClick={() => onExplore(p.arxiv_id)}>
+                graph
+              </button>
             </li>
           ))}
         </ul>

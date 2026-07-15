@@ -190,3 +190,75 @@ header h1 {
 .papers .title {
   flex: 1;
 }
+
+.explore {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.15rem 0.6rem;
+  cursor: pointer;
+}
+
+.explore:hover {
+  border-color: var(--accent);
+}
+
+.graph h2 {
+  font-size: 1.15rem;
+  margin: 0.25rem 0 0.25rem;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.legend {
+  display: flex;
+  gap: 1rem;
+  margin: 0.25rem 0 0.6rem;
+  font-size: 0.85rem;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.graph-well {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.graph-tip {
+  max-width: 320px;
+  padding: 0.4rem 0.6rem;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.graph-tip small {
+  color: var(--muted);
+}
+
+.graph-error {
+  color: var(--error);
+  font-size: 0.85rem;
+}

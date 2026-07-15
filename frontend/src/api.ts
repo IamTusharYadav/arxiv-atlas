@@ -44,6 +44,24 @@ export interface CorpusStatus {
   corpus_size: number;
 }
 
+export interface GraphNodeOut {
+  arxiv_id: string;
+  title: string;
+  primary_category: string;
+}
+
+export interface GraphLinkOut {
+  source: string;
+  target: string;
+  weight: number;
+}
+
+export interface GraphResponse {
+  center: string;
+  nodes: GraphNodeOut[];
+  links: GraphLinkOut[];
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -96,4 +114,10 @@ export async function getStatus(): Promise<CorpusStatus> {
   const resp = await fetch(`${API_BASE}/api/status`);
   if (!resp.ok) throw new ApiError(await detail(resp), resp.status);
   return (await resp.json()) as CorpusStatus;
+}
+
+export async function getGraph(arxivId: string): Promise<GraphResponse> {
+  const resp = await fetch(`${API_BASE}/api/graph/${encodeURIComponent(arxivId)}`);
+  if (!resp.ok) throw new ApiError(await detail(resp), resp.status);
+  return (await resp.json()) as GraphResponse;
 }
