@@ -42,8 +42,14 @@ _jobs = DynamoJobStore(_dynamodb.Table(_require("ATLAS_JOBS_TABLE")))
 def _dispatch(job_id: str) -> None:
     # Fire-and-forget self-invoke: the worker has the full 15 min Lambda budget, unbound by the
     # 30s API Gateway limit the request path is stuck with.
+    name = os.environ["AWS_LAMBDA_FUNCTION_NAME"]
+    # Target the alias, not the bare name: bare resolves to $LATEST, so after a rollback the API
+    # would serve the old version while workers still ran the rolled-back code. The retry cap
+    # (EventInvokeConfig) also hangs off the alias qualifier, not the function. Unset off Lambda
+    # (local RIE, tests), where there is no alias to speak of.
+    alias = os.environ.get("ATLAS_LAMBDA_ALIAS")
     boto3.client("lambda").invoke(
-        FunctionName=os.environ["AWS_LAMBDA_FUNCTION_NAME"],
+        FunctionName=f"{name}:{alias}" if alias else name,
         InvocationType="Event",
         Payload=json.dumps({"job": {"id": job_id}}).encode(),
     )

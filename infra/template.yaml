@@ -16,15 +16,30 @@ Parameters:
     Type: String
     Default: /var/task/models
     Description: Where docker/Dockerfile.api bakes the INT8 model; read by the handler.
+  AlertEmail:
+    Type: String
+    Default: ""
+    Description: Email for alarm and budget notifications; leave empty to deploy without them.
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 40
+    Description: Monthly AWS spend cap; email alerts fire at $10, $25, and this amount.
 
 Globals:
   Function:
-    Timeout: 30
+    # 900s for the async worker's multi-round loop. The request path returns in <1s (API Gateway
+    # caps it at 30s regardless), so this long ceiling only ever applies to the background worker.
+    # ponytail: shared function; split into a short-timeout API fn + a long worker fn if a hung
+    # request billing toward 900s ever matters.
+    Timeout: 900
     # ~1.7 vCPU: 1024 MB starved the cold-start init (onnx load) past Lambda's 10s init cap.
     MemorySize: 3008
     # avx512_vnni quantization (scripts/export_onnx.py) targets x86; keep them in step.
     Architectures:
       - x86_64
+
+Conditions:
+  HasEmail: !Not [!Equals [!Ref AlertEmail, ""]]
 
 Resources:
   # One table per request-path guard; all keyed on `pk`, all reaped by DynamoDB TTL on
@@ -112,6 +127,10 @@ Resources:
       DockerTag: latest
     Properties:
       PackageType: Image
+      # Every deploy publishes an immutable version and repoints this alias; the HttpApi event and
+      # the worker's self-invoke both route through it, so rollback is an alias repoint (~30s,
+      # `make rollback`) with no rebuild. SAM hangs the EventInvokeConfig below off the alias too.
+      AutoPublishAlias: live
       Environment:
         Variables:
           QDRANT_URL: !Ref QdrantUrl
@@ -121,6 +140,8 @@ Resources:
           ATLAS_CACHE_TABLE: !Ref CacheTable
           ATLAS_BUDGET_TABLE: !Ref BudgetTable
           ATLAS_JOBS_TABLE: !Ref JobsTable
+          # Read by _dispatch to self-invoke the alias rather than $LATEST.
+          ATLAS_LAMBDA_ALIAS: live
           LOG_LEVEL: INFO
       # run_job catches its own business errors, so this only retries a hard worker crash/timeout.
       EventInvokeConfig:
@@ -152,7 +173,97 @@ Resources:
             Path: /{proxy+}
             Method: ANY
 
+  # Alarms notify through this topic; the email subscription is added only when AlertEmail is set.
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+
+  AlarmEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasEmail
+    Properties:
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+      TopicArn: !Ref AlarmTopic
+
+  # Hard worker crashes and request-path 500s; caught business errors never count as Lambda errors.
+  FunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Query function errors elevated.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref QueryFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  # Request-path latency only; the async worker runs as a separate invocation API Gateway never sees.
+  ApiLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: API p95 latency high.
+      Namespace: AWS/ApiGateway
+      MetricName: Latency
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref Api
+      ExtendedStatistic: p95
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  # Outermost spend ring on top of the fail-closed in-app daily guard.
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Condition: HasEmail
+    Properties:
+      Budget:
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 10
+            ThresholdType: ABSOLUTE_VALUE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 25
+            ThresholdType: ABSOLUTE_VALUE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: !Ref MonthlyBudgetUsd
+            ThresholdType: ABSOLUTE_VALUE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
 Outputs:
   ApiUrl:
     Description: Base URL of the query API.
     Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com"
+  FunctionName:
+    Description: Generated function name; deploy.yml and `make rollback` repoint its alias.
+    Value: !Ref QueryFunction

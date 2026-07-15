@@ -6,7 +6,9 @@ FROM python:3.12-slim AS builder
 WORKDIR /build
 RUN pip install --no-cache-dir "optimum[onnxruntime]" sentence-transformers pydantic
 COPY src/atlas_core ./src/atlas_core
-COPY scripts ./scripts
+# Just the export script, not all of scripts/: copying the directory made every unrelated script
+# (rollback.sh, smoke_bedrock.py) invalidate the layer below and re-run the ~14 min export.
+COPY scripts/export_onnx.py ./scripts/
 RUN PYTHONPATH=src python scripts/export_onnx.py /models
 
 # Runtime: AWS Lambda base + the api extra (onnxruntime, no torch). CMD names the Mangum handler.

@@ -1,0 +1,118 @@
+name: Deploy
+
+# Version tags ship. Build the image, let CloudFormation publish a version and shift the `live`
+# alias, smoke the result, and repoint the alias at the previous version if the smoke fails.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time, and never cancel one mid-flight: a half-applied CloudFormation update is
+# worse than a queued one.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  STACK: arxiv-atlas
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # The image build re-runs the ONNX export from scratch (no layer cache on a fresh runner),
+    # which is ~14 min of the total on its own.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # An empty AlertEmail flips the template's HasEmail condition off, which deletes the budget
+      # and the alarm subscription. Refuse to deploy rather than silently tear down alerting.
+      - name: Require alert email
+        env:
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          if [ -z "$ALERT_EMAIL" ]; then
+            echo "::error::ALERT_EMAIL is unset; deploying would delete the budget and alarm subscription."
+            exit 1
+          fi
+
+      # Captured before the deploy so the smoke gate has a version to fall back to. Empty on the
+      # first aliased deploy (no alias yet), which disables the rollback step below.
+      - name: Capture current live version
+        id: current
+        run: |
+          fn=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+            --query "Stacks[0].Outputs[?OutputKey=='FunctionName'].OutputValue" \
+            --output text 2>/dev/null || true)
+          prev=""
+          if [ -n "$fn" ] && [ "$fn" != "None" ]; then
+            prev=$(aws lambda get-alias --function-name "$fn" --name live \
+              --query FunctionVersion --output text 2>/dev/null || true)
+          fi
+          echo "function=$fn" >> "$GITHUB_OUTPUT"
+          echo "previous=$prev" >> "$GITHUB_OUTPUT"
+          echo "live version before deploy: ${prev:-none}"
+
+      - name: Build
+        run: sam build -t infra/template.yaml
+
+      - name: Deploy
+        run: |
+          sam deploy -t .aws-sam/build/template.yaml \
+            --stack-name "$STACK" \
+            --region "$AWS_REGION" \
+            --resolve-image-repos \
+            --resolve-s3 \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              QdrantUrl="${{ secrets.QDRANT_URL }}" \
+              QdrantApiKey="${{ secrets.QDRANT_API_KEY }}" \
+              AlertEmail="${{ secrets.ALERT_EMAIL }}" \
+              MonthlyBudgetUsd=40
+
+      # Proves the shifted alias actually serves: /api/status reaches Qdrant and returns the live
+      # corpus size. The full canned-query smoke is commit 42.
+      # The retries absorb the documented cold-pull 503 on the first request against a fresh image
+      # (curl retries 5xx under -f), without masking a real failure: a broken build 503s past every
+      # retry, and a 4xx fails immediately.
+      - name: Smoke
+        id: smoke
+        run: |
+          url=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          echo "smoking $url/api/status"
+          body=$(curl -fsS --max-time 30 --retry 5 --retry-connrefused --retry-delay 10 \
+            "$url/api/status")
+          echo "$body"
+          echo "$body" | grep -q '"corpus_size"' || {
+            echo "::error::status response has no corpus_size"
+            exit 1
+          }
+
+      # Only when the deploy landed but the smoke rejected it. A failed `sam deploy` is already
+      # rolled back by CloudFormation, and a failed build never shifted the alias.
+      - name: Roll back alias
+        if: failure() && steps.smoke.outcome == 'failure' && steps.current.outputs.previous != ''
+        run: |
+          echo "::warning::smoke failed; repointing live to ${{ steps.current.outputs.previous }}"
+          aws lambda update-alias \
+            --function-name "${{ steps.current.outputs.function }}" \
+            --name live \
+            --function-version "${{ steps.current.outputs.previous }}"
+          echo "rolled back. The stack now drifts from the alias until the next deploy."

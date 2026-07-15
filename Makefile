@@ -1,5 +1,5 @@
 # On Windows without make, run the uv commands directly.
-.PHONY: install lint format typecheck test check
+.PHONY: install lint format typecheck test check rollback
 
 install:
 	uv sync
@@ -19,3 +19,7 @@ test:
 	uv run pytest --cov --cov-report=term-missing
 
 check: lint typecheck test
+
+# Repoint the live alias at the previous published version (~30s, no rebuild).
+rollback:
+	bash scripts/rollback.sh
