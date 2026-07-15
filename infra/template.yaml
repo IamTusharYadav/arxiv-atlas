@@ -10,8 +10,8 @@ Parameters:
     Type: String
     NoEcho: true
     Description: >
-      Qdrant Cloud API key. Passed as a NoEcho parameter for a simple first deploy; move to
-      a {{resolve:ssm-secure:...}} dynamic reference to keep it out of the function config.
+      Qdrant Cloud API key. Passed as a NoEcho parameter for a simple first deploy; move it to an
+      SSM SecureString dynamic reference to keep it out of the function config.
   OnnxDir:
     Type: String
     Default: /var/task/models
@@ -20,7 +20,8 @@ Parameters:
 Globals:
   Function:
     Timeout: 30
-    MemorySize: 1024
+    # ~1.7 vCPU: 1024 MB starved the cold-start init (onnx load) past Lambda's 10s init cap.
+    MemorySize: 3008
     # avx512_vnni quantization (scripts/export_onnx.py) targets x86; keep them in step.
     Architectures:
       - x86_64
