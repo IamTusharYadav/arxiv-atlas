@@ -1,4 +1,5 @@
 import hashlib
+import logging
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -9,11 +10,14 @@ from atlas_agents.ask import ask
 from atlas_agents.bedrock import BedrockClient
 from atlas_agents.harness import BudgetExceeded, IterationsExhausted
 from atlas_agents.steps.synthesizer import UngroundedCitations
+from atlas_api.jobs import JobStore
 from atlas_core.budget import DailyBudgetExceeded, DailyBudgetGuard
 from atlas_core.cache import ResponseCache
 from atlas_core.embedding import QUERY_PREFIX, Embedder
 from atlas_core.ratelimit import RateLimiter
 from atlas_core.vectorstore import VectorStore
+
+log = logging.getLogger(__name__)
 
 
 class QueryRequest(BaseModel):
@@ -42,6 +46,18 @@ class QueryResponse(BaseModel):
     trace: list[TraceStep]
     cost_usd: float
     cached: bool = False
+
+
+class QueryAccepted(BaseModel):
+    job_id: str
+    status: str
+
+
+class QueryStatus(BaseModel):
+    job_id: str
+    status: str
+    result: QueryResponse | None = None
+    error: str | None = None
 
 
 class GraphNode(BaseModel):
@@ -80,6 +96,68 @@ def _client_key(request: Request) -> str:
     return hashlib.sha256(ip.encode()).hexdigest()
 
 
+def _answer(
+    question: str,
+    *,
+    client: BedrockClient,
+    store: VectorStore,
+    embedder: Embedder,
+    cache: ResponseCache | None,
+    budget: DailyBudgetGuard | None,
+) -> QueryResponse:
+    answer = ask(question, client=client, store=store, embedder=embedder)
+    response = QueryResponse(
+        brief=answer.brief,
+        papers=[
+            PaperOut(
+                arxiv_id=s.paper.arxiv_id,
+                title=s.paper.title,
+                primary_category=s.paper.primary_category,
+                score=s.score,
+            )
+            for s in answer.papers
+        ],
+        trace=[TraceStep.model_validate(r, from_attributes=True) for r in answer.trace],
+        cost_usd=answer.cost_usd,
+    )
+    if budget is not None:
+        # ponytail: only successful runs are charged; a run that aborts on a cap still spent.
+        budget.charge(answer.cost_usd)
+    if cache is not None:
+        cache.put(embedder.embed([QUERY_PREFIX + question])[0], response.model_dump())
+    return response
+
+
+def run_job(
+    job_id: str,
+    *,
+    jobs: JobStore,
+    client: BedrockClient,
+    store: VectorStore,
+    embedder: Embedder,
+    cache: ResponseCache | None,
+    budget: DailyBudgetGuard | None,
+) -> None:
+    # Runs out of band from the request, so every outcome (success or failure) is written to the
+    # job store rather than raised.
+    job = jobs.get(job_id)
+    if job is None:
+        return
+    jobs.mark_running(job_id)
+    try:
+        response = _answer(
+            job.question, client=client, store=store, embedder=embedder, cache=cache, budget=budget
+        )
+    except (BudgetExceeded, IterationsExhausted, UngroundedCitations) as exc:
+        jobs.fail(job_id, str(exc))
+        return
+    except Exception:
+        log.exception("query job %s failed", job_id)
+        jobs.fail(job_id, "internal error")
+        return
+    jobs.finish(job_id, response.model_dump())
+
+
 def create_app(
     *,
     store: VectorStore,
@@ -88,6 +166,8 @@ def create_app(
     limiter: RateLimiter | None = None,
     cache: ResponseCache | None = None,
     budget: DailyBudgetGuard | None = None,
+    jobs: JobStore | None = None,
+    dispatch: Callable[[str], None] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="ArXiv Atlas API", version="0.1.0")
 
@@ -108,13 +188,11 @@ def create_app(
             return await call_next(request)
 
     @app.post("/api/query")
-    def query(req: QueryRequest) -> QueryResponse:
-        # Order: rate-limit (middleware) -> cache -> budget -> agent. A cache hit is free to
-        # serve, so it runs before the budget gate.
-        embedding = None
+    def query(req: QueryRequest, response: Response) -> QueryResponse | QueryAccepted:
+        # Order: rate-limit (middleware) -> cache -> budget -> agent. A cache hit is free, so it
+        # answers inline and never enqueues a job.
         if cache is not None:
-            embedding = embedder.embed([QUERY_PREFIX + req.question])[0]
-            hit = cache.get(embedding)
+            hit = cache.get(embedder.embed([QUERY_PREFIX + req.question])[0])
             if hit is not None:
                 return QueryResponse.model_validate(hit).model_copy(update={"cached": True})
         if budget is not None:
@@ -122,32 +200,35 @@ def create_app(
                 budget.check()
             except DailyBudgetExceeded as exc:
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
-        try:
-            answer = ask(req.question, client=client, store=store, embedder=embedder)
-        except (BudgetExceeded, IterationsExhausted, UngroundedCitations) as exc:
-            # The loop hitting its caps or failing to ground a brief, not bad input: 503, not 500.
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
-        response = QueryResponse(
-            brief=answer.brief,
-            papers=[
-                PaperOut(
-                    arxiv_id=s.paper.arxiv_id,
-                    title=s.paper.title,
-                    primary_category=s.paper.primary_category,
-                    score=s.score,
+        if jobs is None or dispatch is None:
+            # Synchronous fallback (local dev, tests): the loop is fast against scripted Bedrock.
+            try:
+                return _answer(
+                    req.question,
+                    client=client,
+                    store=store,
+                    embedder=embedder,
+                    cache=cache,
+                    budget=budget,
                 )
-                for s in answer.papers
-            ],
-            trace=[TraceStep.model_validate(r, from_attributes=True) for r in answer.trace],
-            cost_usd=answer.cost_usd,
-        )
-        if budget is not None:
-            # ponytail: only successful runs are charged; a run that aborts on a cap still spent.
-            # Upgrade path: surface ctx.spent_usd on the terminal exceptions and charge here too.
-            budget.charge(answer.cost_usd)
-        if cache is not None and embedding is not None:
-            cache.put(embedding, response.model_dump())
-        return response
+            except (BudgetExceeded, IterationsExhausted, UngroundedCitations) as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+        # The real loop outruns API Gateway's 30s limit, so run it in a background invocation and
+        # hand back a job id to poll.
+        job_id = jobs.create(req.question)
+        dispatch(job_id)
+        response.status_code = 202
+        return QueryAccepted(job_id=job_id, status="pending")
+
+    @app.get("/api/query/{job_id}")
+    def query_status(job_id: str) -> QueryStatus:
+        if jobs is None:
+            raise HTTPException(status_code=404, detail="async jobs are not enabled")
+        job = jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail=f"job {job_id} not found")
+        result = QueryResponse.model_validate(job.result) if job.result is not None else None
+        return QueryStatus(job_id=job.id, status=job.status, result=result, error=job.error)
 
     @app.get("/api/graph/{arxiv_id}")
     def graph(arxiv_id: str) -> GraphResponse:

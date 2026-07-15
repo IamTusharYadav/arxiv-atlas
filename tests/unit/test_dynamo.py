@@ -1,7 +1,12 @@
 from decimal import Decimal
 from typing import Any
 
-from atlas_api.dynamo import DynamoBucketStore, DynamoCacheStore, dynamo_backends
+from atlas_api.dynamo import (
+    DynamoBucketStore,
+    DynamoCacheStore,
+    DynamoJobStore,
+    dynamo_backends,
+)
 from atlas_core.budget import DailyBudgetGuard
 from atlas_core.cache import CacheEntry, ResponseCache
 from atlas_core.ratelimit import RateLimiter
@@ -74,3 +79,38 @@ def test_backends_are_wired_to_their_tables() -> None:
     vec = np.array([1.0, 0.0], dtype=np.float32)
     cache.put(vec, {"brief": "cached"})
     assert cache.get(vec) == {"brief": "cached"}  # round-trips through the cache table
+
+
+def test_job_store_lifecycle() -> None:
+    store = DynamoJobStore(FakeTable())
+    job_id = store.create("what is X?")
+
+    created = store.get(job_id)
+    assert created is not None
+    assert created.status == "pending"
+    assert created.question == "what is X?"
+
+    store.mark_running(job_id)
+    running = store.get(job_id)
+    assert running is not None and running.status == "running"
+
+    store.finish(job_id, {"brief": "done"})
+    done = store.get(job_id)
+    assert done is not None
+    assert done.status == "done"
+    assert done.result == {"brief": "done"}
+    assert done.error is None
+
+
+def test_job_store_fail_records_error() -> None:
+    store = DynamoJobStore(FakeTable())
+    job_id = store.create("q")
+    store.fail(job_id, "boom")
+    failed = store.get(job_id)
+    assert failed is not None
+    assert failed.status == "error"
+    assert failed.error == "boom"
+
+
+def test_job_store_missing_returns_none() -> None:
+    assert DynamoJobStore(FakeTable()).get("nope") is None

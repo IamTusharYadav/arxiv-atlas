@@ -71,6 +71,21 @@ Resources:
         AttributeName: expires_at
         Enabled: true
 
+  # Async query jobs: POST enqueues here, a background invocation writes the result, GET polls.
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
   Api:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -105,6 +120,7 @@ Resources:
           ATLAS_BUCKET_TABLE: !Ref BucketTable
           ATLAS_CACHE_TABLE: !Ref CacheTable
           ATLAS_BUDGET_TABLE: !Ref BudgetTable
+          ATLAS_JOBS_TABLE: !Ref JobsTable
           LOG_LEVEL: INFO
       Policies:
         - DynamoDBCrudPolicy:
@@ -113,11 +129,18 @@ Resources:
             TableName: !Ref CacheTable
         - DynamoDBCrudPolicy:
             TableName: !Ref BudgetTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
         # Scope to the specific inference-profile ARNs once the account's are fixed.
         - Statement:
             - Effect: Allow
               Action: bedrock:InvokeModel
               Resource: "*"
+        # Self-invoke for the async worker. Stack-name pattern avoids a GetAtt cycle on the role.
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-*"
       Events:
         Proxy:
           Type: HttpApi

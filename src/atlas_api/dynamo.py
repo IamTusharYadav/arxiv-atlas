@@ -1,8 +1,10 @@
 import json
 from decimal import Decimal
+from time import time
 from typing import Any, Protocol
 from uuid import uuid4
 
+from atlas_api.jobs import Job
 from atlas_core.budget import DailyBudgetGuard
 from atlas_core.cache import CacheEntry, ResponseCache
 from atlas_core.ratelimit import RateLimiter
@@ -10,6 +12,7 @@ from atlas_core.ratelimit import RateLimiter
 # An idle bucket is fully refilled after burst/rate seconds, so a reaped one is indistinguishable
 # from a fresh one; a short TTL just keeps the table from accumulating dead IPs.
 _BUCKET_TTL_S = 3600
+_JOB_TTL_S = 24 * 3600
 
 
 class _Table(Protocol):
@@ -73,6 +76,55 @@ class DynamoCacheStore:
                 "expires_at": Decimal(int(entry.expires_at)),
             }
         )
+
+
+class DynamoJobStore:
+    def __init__(self, table: _Table) -> None:
+        self._table = table
+
+    def create(self, question: str) -> str:
+        job_id = uuid4().hex
+        self._table.put_item(
+            Item={
+                "pk": job_id,
+                "status": "pending",
+                "question": question,
+                "expires_at": Decimal(int(time()) + _JOB_TTL_S),
+            }
+        )
+        return job_id
+
+    def get(self, job_id: str) -> Job | None:
+        item = self._table.get_item(Key={"pk": job_id}).get("Item")
+        if item is None:
+            return None
+        result = item.get("result")
+        error = item.get("error")
+        return Job(
+            id=job_id,
+            status=str(item["status"]),
+            question=str(item.get("question", "")),
+            result=json.loads(result) if result else None,
+            error=str(error) if error else None,
+        )
+
+    def mark_running(self, job_id: str) -> None:
+        self._patch(job_id, status="running")
+
+    def finish(self, job_id: str, result: dict[str, Any]) -> None:
+        self._patch(job_id, status="done", result=json.dumps(result))
+
+    def fail(self, job_id: str, error: str) -> None:
+        self._patch(job_id, status="error", error=error)
+
+    def _patch(self, job_id: str, **changes: Any) -> None:
+        # Read-modify-write, not UpdateItem: put_item keeps the fake table trivial and sidesteps
+        # reserved-word aliasing. A job has one writer (the worker), so there is no race.
+        item = self._table.get_item(Key={"pk": job_id}).get("Item")
+        if item is None:
+            return
+        item.update(changes)
+        self._table.put_item(Item=item)
 
 
 def dynamo_backends(

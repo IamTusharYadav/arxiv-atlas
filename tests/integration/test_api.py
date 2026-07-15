@@ -1,8 +1,13 @@
+from dataclasses import replace
+from typing import Any
+
 from anthropic.types import Message
 from fastapi.testclient import TestClient
 
 from atlas_agents.bedrock import SONNET
 from atlas_api import create_app
+from atlas_api.app import run_job
+from atlas_api.jobs import Job
 from atlas_core.budget import DailyBudgetGuard
 from atlas_core.cache import ResponseCache
 from atlas_core.models import Edge
@@ -13,6 +18,50 @@ from tests.unit.test_ask import IDS, check_json, extract_json, plan_json, rerank
 from tests.unit.test_budget import _FakeTable
 from tests.unit.test_cache import _FakeStore
 from tests.unit.test_ratelimit import MemoryBuckets
+
+
+class MemoryJobStore:
+    def __init__(self) -> None:
+        self._jobs: dict[str, Job] = {}
+
+    def create(self, question: str) -> str:
+        job_id = f"job-{len(self._jobs)}"
+        self._jobs[job_id] = Job(job_id, "pending", question, None, None)
+        return job_id
+
+    def get(self, job_id: str) -> Job | None:
+        return self._jobs.get(job_id)
+
+    def mark_running(self, job_id: str) -> None:
+        self._jobs[job_id] = replace(self._jobs[job_id], status="running")
+
+    def finish(self, job_id: str, result: dict[str, Any]) -> None:
+        self._jobs[job_id] = replace(self._jobs[job_id], status="done", result=result)
+
+    def fail(self, job_id: str, error: str) -> None:
+        self._jobs[job_id] = replace(self._jobs[job_id], status="error", error=error)
+
+
+def async_client(
+    store: QdrantStore, messages: list[Message | Exception], jobs: MemoryJobStore
+) -> TestClient:
+    # dispatch runs the worker inline, so an enqueued job is already done when the POST returns.
+    bedrock, _ = make_bedrock_client(messages)
+    embedder = FakeEmbedder()
+
+    def dispatch(job_id: str) -> None:
+        run_job(
+            job_id,
+            jobs=jobs,
+            client=bedrock,
+            store=store,
+            embedder=embedder,
+            cache=None,
+            budget=None,
+        )
+
+    app = create_app(store=store, embedder=embedder, client=bedrock, jobs=jobs, dispatch=dispatch)
+    return TestClient(app)
 
 
 def client_for(
@@ -168,3 +217,60 @@ def test_query_over_daily_budget_returns_503(
     guard.charge(1.00)  # day already at cap, so the check denies before any Bedrock call
     api = client_for(memory_store, [], budget=guard)
     assert api.post("/api/query", json={"question": "kv cache?"}).status_code == 503
+
+
+def test_async_query_enqueues_then_completes(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    brief_md = f"Async brief [{IDS[0]}]."
+    api = async_client(
+        memory_store,
+        [
+            make_message(plan_json()),
+            make_message(rerank_json({IDS[0]: 9, IDS[1]: 7, IDS[2]: 2})),
+            make_message(extract_json([IDS[0], IDS[1]])),
+            make_message(check_json(sufficient=True)),
+            make_message(brief_md, model=SONNET),
+        ],
+        MemoryJobStore(),
+    )
+
+    accepted = api.post("/api/query", json={"question": "kv cache?"})
+    assert accepted.status_code == 202
+    job_id = accepted.json()["job_id"]
+
+    got = api.get(f"/api/query/{job_id}")
+    assert got.status_code == 200
+    body = got.json()
+    assert body["status"] == "done"
+    assert body["result"]["brief"] == brief_md
+    assert {p["arxiv_id"] for p in body["result"]["papers"]} == {IDS[0], IDS[1]}
+
+
+def test_async_query_job_records_error(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    # A planner call charged past the per-query cap aborts the run inside the worker.
+    api = async_client(
+        memory_store, [make_message(plan_json(), output_tokens=5_000_000)], MemoryJobStore()
+    )
+    job_id = api.post("/api/query", json={"question": "kv cache?"}).json()["job_id"]
+    body = api.get(f"/api/query/{job_id}").json()
+    assert body["status"] == "error"
+    assert body["result"] is None
+    assert body["error"]
+
+
+def test_query_status_unknown_job_404(memory_store: QdrantStore) -> None:
+    api = async_client(memory_store, [], MemoryJobStore())
+    assert api.get("/api/query/nope").status_code == 404
+
+
+def test_query_status_404_when_async_disabled(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    # client_for wires no jobs store, so the app runs sync and the status route reports async off.
+    assert client_for(memory_store, []).get("/api/query/whatever").status_code == 404
