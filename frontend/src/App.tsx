@@ -9,6 +9,7 @@ import {
   type QueryResult,
 } from "./api";
 import GraphExplorer from "./GraphExplorer";
+import TracePanel from "./TracePanel";
 
 const POLL_MS = 2500;
 // A few network blips are survivable; a run of them means the API is gone, so stop burning
@@ -158,6 +159,7 @@ function Result({
       <section className="card brief">
         <div className="meta">
           {result.cached ? <span className="badge">cached</span> : null}
+          {result.partial ? <span className="badge warn">stopped early</span> : null}
           <span className="cost">${result.cost_usd.toFixed(4)}</span>
         </div>
         <ReactMarkdown>{result.brief}</ReactMarkdown>
@@ -179,6 +181,7 @@ function Result({
           ))}
         </ul>
       </section>
+      <TracePanel trace={result.trace} total={result.cost_usd} />
     </>
   );
 }

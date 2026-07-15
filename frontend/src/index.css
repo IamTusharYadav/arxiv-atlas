@@ -9,6 +9,10 @@
   --muted: #9aa3b2;
   --accent: #6ea8fe;
   --error: #e5717a;
+  /* Status amber. The reference warning step is tuned for marks (sub-3:1 on a light
+     surface); these are stepped for text, since the badge says "stopped early" in it.
+     Measured 9.68:1 dark, 5.53:1 light, both clear the 4.5:1 text bar. */
+  --warn: #fab219;
   color: var(--text);
   background: var(--bg);
 }
@@ -22,6 +26,7 @@
     --muted: #5b6572;
     --accent: #2563eb;
     --error: #b3313c;
+    --warn: #8a5a00;
   }
 }
 
@@ -261,4 +266,69 @@ header h1 {
 .graph-error {
   color: var(--error);
   font-size: 0.85rem;
+}
+
+.badge.warn {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.trace summary {
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.trace summary::marker {
+  color: var(--muted);
+}
+
+.trace-meta {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* The table scrolls inside its own well; the page body never scrolls sideways. */
+.trace-scroll {
+  overflow-x: auto;
+  margin-top: 0.75rem;
+}
+
+.trace table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.trace th,
+.trace td {
+  text-align: left;
+  padding: 0.35rem 0.75rem 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.trace th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.trace .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  padding-right: 0;
+}
+
+.trace .step-cell {
+  font-weight: 600;
+}
+
+.trace tfoot td {
+  border-bottom: none;
+  color: var(--muted);
+  font-weight: 600;
 }

@@ -1,7 +1,10 @@
 import json
 
+import pytest
+
 from atlas_agents.ask import ask
 from atlas_agents.bedrock import SONNET
+from atlas_agents.harness import BudgetExceeded
 from atlas_core.vectorstore import QdrantStore
 from tests.conftest import FakeEmbedder, make_bedrock_client, make_message, make_paper
 
@@ -114,6 +117,46 @@ def test_ask_insufficient_evidence_runs_second_round(
     assert answer.brief == brief_md
     assert {s.paper.arxiv_id for s in answer.papers} == {IDS[0], IDS[2]}
     assert [r.step for r in answer.trace].count("retriever") == 2
+
+
+def test_ask_returns_gathered_evidence_when_the_cap_fires(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    # Extraction lands, then the check call blows the per-query cap. The claims already paid
+    # for come back as a partial answer rather than being thrown away.
+    client, fake = make_bedrock_client(
+        [
+            make_message(plan_json()),
+            make_message(rerank_json({IDS[0]: 9, IDS[1]: 7})),
+            make_message(extract_json([IDS[0], IDS[1]])),
+            make_message(check_json(sufficient=False), output_tokens=5_000_000),
+        ]
+    )
+
+    answer = ask("kv cache?", client=client, store=memory_store, embedder=fake_embedder)
+
+    assert answer.partial is True
+    assert "stopped early" in answer.brief
+    assert f"claim from {IDS[0]}" in answer.brief
+    assert f"[{IDS[0]}]" in answer.brief  # findings stay attributed to their paper
+    assert {s.paper.arxiv_id for s in answer.papers} == {IDS[0], IDS[1]}
+    assert answer.cost_usd > 0
+    assert [r.step for r in answer.trace][:3] == ["planner", "retriever", "reranker"]
+    # The budget is what ran out, so assembling the partial must not call the model again.
+    assert len(fake.calls) == 4
+    assert all("haiku" in str(c["model"]) for c in fake.calls)
+
+
+def test_ask_cap_with_no_evidence_still_raises(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    # The cap fires before anything was gathered; there is no partial answer to give, so the
+    # honest outcome is the error.
+    client, _ = make_bedrock_client([make_message(plan_json(), output_tokens=5_000_000)])
+    with pytest.raises(BudgetExceeded):
+        ask("kv cache?", client=client, store=memory_store, embedder=fake_embedder)
 
 
 def test_ask_no_relevant_papers_declines_gracefully(

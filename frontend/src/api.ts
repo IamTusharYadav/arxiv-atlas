@@ -24,6 +24,8 @@ export interface QueryResult {
   trace: TraceStep[];
   cost_usd: number;
   cached: boolean;
+  // A cap stopped the run: the brief is gathered evidence, not a synthesized answer.
+  partial: boolean;
 }
 
 export interface ProgressStep {

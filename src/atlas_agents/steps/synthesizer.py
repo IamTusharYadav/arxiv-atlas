@@ -70,6 +70,7 @@ def synthesize(
             raise UngroundedCitations(
                 f"brief cites unknown ids after repair: {sorted(invented)}",
                 spent_usd=ctx.spent_usd,
+                trace=list(ctx.trace),
             )
 
     cited = {m.group(1) for m in _CITATION.finditer(completion.text)}

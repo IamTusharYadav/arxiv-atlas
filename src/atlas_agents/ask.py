@@ -3,7 +3,17 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel
 
 from atlas_agents.bedrock import BedrockClient
-from atlas_agents.harness import BUDGET_USD, MAX_ITERS, RunContext, StepRecord, StepSink, run_loop
+from atlas_agents.harness import (
+    BUDGET_USD,
+    MAX_ITERS,
+    AgentError,
+    BudgetExceeded,
+    IterationsExhausted,
+    RunContext,
+    StepRecord,
+    StepSink,
+    run_loop,
+)
 from atlas_agents.prompts import CHECK
 from atlas_agents.steps.evidence import neutralize
 from atlas_agents.steps.extractor import PaperClaims, extract
@@ -16,6 +26,11 @@ from atlas_core.embedding import Embedder
 from atlas_core.vectorstore import ScoredPaper, VectorStore
 
 SCOPE_PREFIX = "This corpus covers arXiv abstracts in cs.AI, cs.LG and cs.CL only."
+PARTIAL_NOTE = (
+    "**This run stopped early, so this is evidence rather than a finished brief.** "
+    "The gathered findings are listed below, each attributed to the paper it came from, "
+    "but they were never synthesized into an argument."
+)
 
 
 class EvidenceCheck(BaseModel):
@@ -29,6 +44,9 @@ class Answer:
     papers: list[ScoredPaper]
     trace: list[StepRecord]
     cost_usd: float
+    # True when a cap stopped the run and the brief is locally assembled evidence rather than
+    # a synthesized answer. Callers must not cache a partial as if it were the real thing.
+    partial: bool = False
 
 
 @dataclass
@@ -96,10 +114,41 @@ def ask(
 
     with query_trace(question) as trace_sink:
         loop_sink: StepSink = trace_sink if sink is None else _FanOutSink([trace_sink, sink])
-        brief, ctx = run_loop(task, max_iters=max_iters, budget_usd=budget_usd, sink=loop_sink)
+        try:
+            brief, ctx = run_loop(task, max_iters=max_iters, budget_usd=budget_usd, sink=loop_sink)
+        except (BudgetExceeded, IterationsExhausted) as exc:
+            # A cap stopped the loop, but the evidence it already paid for is still good.
+            # Hand it back instead of throwing the run away. Only these two: an ungrounded
+            # brief or a schema failure means the output itself is untrustworthy, so those
+            # stay hard errors.
+            partial = _partial_answer(exc, state)
+            if partial is None:
+                raise
+            trace_sink.set_output(partial.brief)
+            return partial
         trace_sink.set_output(brief)
     cited = [state.papers[c.arxiv_id] for c in state.claims.values()]
     return Answer(brief=brief, papers=cited, trace=ctx.trace, cost_usd=ctx.spent_usd)
+
+
+def _partial_answer(exc: AgentError, state: _State) -> Answer | None:
+    """Evidence gathered before a cap fired, assembled locally. No model call: the budget is
+    exactly what ran out. None when nothing was gathered, where a bare failure is honest."""
+    claims = [c for c in state.claims.values() if c.arxiv_id in state.papers]
+    if not claims:
+        return None
+    sections = [PARTIAL_NOTE]
+    for c in claims:
+        title = state.papers[c.arxiv_id].paper.title
+        findings = "\n".join(f"- {claim}" for claim in c.claims)
+        sections.append(f"### {title} [{c.arxiv_id}]\n{findings}")
+    return Answer(
+        brief="\n\n".join(sections),
+        papers=[state.papers[c.arxiv_id] for c in claims],
+        trace=exc.trace,
+        cost_usd=exc.spent_usd,
+        partial=True,
+    )
 
 
 def _check_evidence(

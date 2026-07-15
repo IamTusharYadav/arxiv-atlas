@@ -14,11 +14,15 @@ BUDGET_USD = 0.12
 
 class AgentError(RuntimeError):
     """Terminal loop failure. Carries the run's actual spend so callers can still charge
-    the daily budget counter for an aborted run; the money went out either way."""
+    the daily budget counter for an aborted run (the money went out either way), and the
+    trace so far so an aborted run can still show where it went."""
 
-    def __init__(self, message: str, *, spent_usd: float = 0.0) -> None:
+    def __init__(
+        self, message: str, *, spent_usd: float = 0.0, trace: list["StepRecord"] | None = None
+    ) -> None:
         super().__init__(message)
         self.spent_usd = spent_usd
+        self.trace = trace or []
 
 
 class BudgetExceeded(AgentError):
@@ -99,6 +103,7 @@ class RunContext:
                 f"query spend ${self.spent_usd:.4f} exceeds cap ${self.budget_usd:.2f} "
                 f"at step {step!r}",
                 spent_usd=self.spent_usd,
+                trace=list(self.trace),
             )
 
 
@@ -126,4 +131,8 @@ def run_loop[T](
                 ctx.spent_usd,
             )
             return result, ctx
-    raise IterationsExhausted(f"no answer after {max_iters} iterations", spent_usd=ctx.spent_usd)
+    raise IterationsExhausted(
+        f"no answer after {max_iters} iterations",
+        spent_usd=ctx.spent_usd,
+        trace=list(ctx.trace),
+    )

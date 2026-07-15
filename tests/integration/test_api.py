@@ -240,6 +240,29 @@ def test_aborted_run_still_charges_daily_budget(
     assert float(table.spent) > 20  # ~5M output tokens of Haiku, charged despite the abort
 
 
+def test_partial_answer_is_returned_but_never_cached(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    cache = ResponseCache(_FakeStore())
+    # The check call blows the per-query cap after extraction, so the run returns gathered
+    # evidence. Caching that would serve a capped run's leftovers for the whole TTL.
+    api = client_for(
+        memory_store,
+        [
+            make_message(plan_json()),
+            make_message(rerank_json({IDS[0]: 9})),
+            make_message(extract_json([IDS[0]])),
+            make_message(check_json(sufficient=False), output_tokens=5_000_000),
+        ],
+        cache=cache,
+    )
+    body = api.post("/api/query", json={"question": "kv cache?"}).json()
+    assert body["partial"] is True
+    assert body["papers"][0]["arxiv_id"] == IDS[0]
+    assert cache.get(fake_embedder.embed(["kv cache?"])[0]) is None  # nothing stored
+
+
 def test_query_over_daily_budget_returns_503(
     memory_store: QdrantStore, fake_embedder: FakeEmbedder
 ) -> None:

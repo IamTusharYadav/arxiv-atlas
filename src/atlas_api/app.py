@@ -51,6 +51,8 @@ class QueryResponse(BaseModel):
     trace: list[TraceStep]
     cost_usd: float
     cached: bool = False
+    # A cap stopped the run: the brief is gathered evidence, not a synthesized answer.
+    partial: bool = False
 
 
 class QueryAccepted(BaseModel):
@@ -149,11 +151,13 @@ def _answer(
         ],
         trace=[TraceStep.model_validate(r, from_attributes=True) for r in answer.trace],
         cost_usd=answer.cost_usd,
+        partial=answer.partial,
     )
     if budget is not None:
-        # ponytail: only successful runs are charged; a run that aborts on a cap still spent.
         budget.charge(answer.cost_usd)
-    if cache is not None:
+    # Never cache a partial: it would serve a capped run's leftovers to everyone asking that
+    # question for the whole TTL, long after the budget recovered.
+    if cache is not None and not response.partial:
         cache.put(embedder.embed([QUERY_PREFIX + question])[0], response.model_dump())
     return response
 
