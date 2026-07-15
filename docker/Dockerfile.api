@@ -1,12 +1,13 @@
 # Builder: export and INT8-quantize the embedding model. Heavy (torch, optimum), all discarded
-# below; only the ~34 MB model files cross into the runtime image.
+# below; only the ~34 MB model files cross into the runtime image. The export deps and the export
+# itself sit above the app COPY and pull in only atlas_core (for the contract's model id), so an
+# app-code change reuses this cached model layer instead of re-downloading and re-exporting.
 FROM python:3.12-slim AS builder
 WORKDIR /build
-COPY pyproject.toml README.md LICENSE ./
-COPY src ./src
+RUN pip install --no-cache-dir "optimum[onnxruntime]" sentence-transformers pydantic
+COPY src/atlas_core ./src/atlas_core
 COPY scripts ./scripts
-RUN pip install --no-cache-dir ".[ingest]" "optimum[onnxruntime]" \
-    && python scripts/export_onnx.py /models
+RUN PYTHONPATH=src python scripts/export_onnx.py /models
 
 # Runtime: AWS Lambda base + the api extra (onnxruntime, no torch). CMD names the Mangum handler.
 FROM public.ecr.aws/lambda/python:3.12
