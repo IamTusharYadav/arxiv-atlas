@@ -122,6 +122,9 @@ Resources:
           ATLAS_BUDGET_TABLE: !Ref BudgetTable
           ATLAS_JOBS_TABLE: !Ref JobsTable
           LOG_LEVEL: INFO
+      # run_job catches its own business errors, so this only retries a hard worker crash/timeout.
+      EventInvokeConfig:
+        MaximumRetryAttempts: 1
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref BucketTable

@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel
 
 from atlas_agents.bedrock import BedrockClient
-from atlas_agents.harness import BUDGET_USD, MAX_ITERS, RunContext, StepRecord, run_loop
+from atlas_agents.harness import BUDGET_USD, MAX_ITERS, RunContext, StepRecord, StepSink, run_loop
 from atlas_agents.prompts import CHECK
 from atlas_agents.steps.extractor import PaperClaims, extract
 from atlas_agents.steps.planner import MAX_SUBQUERIES, Plan, plan_query
@@ -38,6 +38,15 @@ class _State:
     claims: dict[str, PaperClaims] = field(default_factory=dict)
 
 
+class _FanOutSink:
+    def __init__(self, sinks: list[StepSink]) -> None:
+        self._sinks = sinks
+
+    def step(self, record: StepRecord, *, model: str | None, version: str | None) -> None:
+        for sink in self._sinks:
+            sink.step(record, model=model, version=version)
+
+
 def ask(
     question: str,
     *,
@@ -46,6 +55,7 @@ def ask(
     embedder: Embedder,
     max_iters: int = MAX_ITERS,
     budget_usd: float = BUDGET_USD,
+    sink: StepSink | None = None,
 ) -> Answer:
     state = _State()
 
@@ -83,9 +93,10 @@ def ask(
                 return None
         return synthesize(client, ctx, question, list(state.papers.values()), evidence)
 
-    with query_trace(question) as sink:
-        brief, ctx = run_loop(task, max_iters=max_iters, budget_usd=budget_usd, sink=sink)
-        sink.set_output(brief)
+    with query_trace(question) as trace_sink:
+        loop_sink: StepSink = trace_sink if sink is None else _FanOutSink([trace_sink, sink])
+        brief, ctx = run_loop(task, max_iters=max_iters, budget_usd=budget_usd, sink=loop_sink)
+        trace_sink.set_output(brief)
     cited = [state.papers[c.arxiv_id] for c in state.claims.values()]
     return Answer(brief=brief, papers=cited, trace=ctx.trace, cost_usd=ctx.spent_usd)
 

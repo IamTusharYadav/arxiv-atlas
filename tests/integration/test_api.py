@@ -35,6 +35,9 @@ class MemoryJobStore:
     def mark_running(self, job_id: str) -> None:
         self._jobs[job_id] = replace(self._jobs[job_id], status="running")
 
+    def set_progress(self, job_id: str, progress: list[dict[str, str]]) -> None:
+        self._jobs[job_id] = replace(self._jobs[job_id], progress=progress)
+
     def finish(self, job_id: str, result: dict[str, Any]) -> None:
         self._jobs[job_id] = replace(self._jobs[job_id], status="done", result=result)
 
@@ -246,6 +249,31 @@ def test_async_query_enqueues_then_completes(
     assert body["status"] == "done"
     assert body["result"]["brief"] == brief_md
     assert {p["arxiv_id"] for p in body["result"]["papers"]} == {IDS[0], IDS[1]}
+    # progress accumulated per step as the worker ran (option C, surfaced via polling).
+    steps = [s["step"] for s in body["progress"]]
+    assert steps[0] == "planner" and steps[-1] == "synthesizer"
+
+
+def test_query_dispatch_failure_marks_job_failed(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    jobs = MemoryJobStore()
+    bedrock, _ = make_bedrock_client([])
+
+    def dispatch(job_id: str) -> None:
+        raise RuntimeError("invoke failed")
+
+    api = TestClient(
+        create_app(
+            store=memory_store, embedder=fake_embedder, client=bedrock, jobs=jobs, dispatch=dispatch
+        )
+    )
+    resp = api.post("/api/query", json={"question": "kv cache?"})
+    assert resp.status_code == 503
+    # the job was created then marked failed, not left stuck pending
+    (job,) = jobs._jobs.values()
+    assert job.status == "error"
 
 
 def test_async_query_job_records_error(

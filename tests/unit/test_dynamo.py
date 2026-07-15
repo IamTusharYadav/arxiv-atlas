@@ -94,6 +94,11 @@ def test_job_store_lifecycle() -> None:
     running = store.get(job_id)
     assert running is not None and running.status == "running"
 
+    store.set_progress(job_id, [{"step": "planner", "summary": "3 subqueries"}])
+    progressing = store.get(job_id)
+    assert progressing is not None
+    assert progressing.progress == [{"step": "planner", "summary": "3 subqueries"}]
+
     store.finish(job_id, {"brief": "done"})
     done = store.get(job_id)
     assert done is not None

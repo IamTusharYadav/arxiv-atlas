@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from atlas_agents.ask import ask
 from atlas_agents.bedrock import BedrockClient
-from atlas_agents.harness import BudgetExceeded, IterationsExhausted
+from atlas_agents.harness import BudgetExceeded, IterationsExhausted, StepRecord, StepSink
 from atlas_agents.steps.synthesizer import UngroundedCitations
 from atlas_api.jobs import JobStore
 from atlas_core.budget import DailyBudgetExceeded, DailyBudgetGuard
@@ -56,6 +56,7 @@ class QueryAccepted(BaseModel):
 class QueryStatus(BaseModel):
     job_id: str
     status: str
+    progress: list[dict[str, str]] = []
     result: QueryResponse | None = None
     error: str | None = None
 
@@ -96,6 +97,21 @@ def _client_key(request: Request) -> str:
     return hashlib.sha256(ip.encode()).hexdigest()
 
 
+class _JobProgressSink:
+    def __init__(self, jobs: JobStore, job_id: str) -> None:
+        self._jobs = jobs
+        self._job_id = job_id
+        self._steps: list[dict[str, str]] = []
+
+    def step(self, record: StepRecord, *, model: str | None, version: str | None) -> None:
+        self._steps.append({"step": record.step, "summary": record.summary})
+        try:
+            self._jobs.set_progress(self._job_id, list(self._steps))
+        except Exception:
+            # Progress is best-effort; a failed update must not sink the run.
+            log.debug("progress update failed for job %s", self._job_id)
+
+
 def _answer(
     question: str,
     *,
@@ -104,8 +120,9 @@ def _answer(
     embedder: Embedder,
     cache: ResponseCache | None,
     budget: DailyBudgetGuard | None,
+    sink: StepSink | None = None,
 ) -> QueryResponse:
-    answer = ask(question, client=client, store=store, embedder=embedder)
+    answer = ask(question, client=client, store=store, embedder=embedder, sink=sink)
     response = QueryResponse(
         brief=answer.brief,
         papers=[
@@ -146,7 +163,13 @@ def run_job(
     jobs.mark_running(job_id)
     try:
         response = _answer(
-            job.question, client=client, store=store, embedder=embedder, cache=cache, budget=budget
+            job.question,
+            client=client,
+            store=store,
+            embedder=embedder,
+            cache=cache,
+            budget=budget,
+            sink=_JobProgressSink(jobs, job_id),
         )
     except (BudgetExceeded, IterationsExhausted, UngroundedCitations) as exc:
         jobs.fail(job_id, str(exc))
@@ -216,7 +239,13 @@ def create_app(
         # The real loop outruns API Gateway's 30s limit, so run it in a background invocation and
         # hand back a job id to poll.
         job_id = jobs.create(req.question)
-        dispatch(job_id)
+        try:
+            dispatch(job_id)
+        except Exception as exc:
+            # Mark the job failed rather than leave it stuck pending until TTL.
+            log.exception("dispatch failed for job %s", job_id)
+            jobs.fail(job_id, "could not start the query worker")
+            raise HTTPException(status_code=503, detail="could not start the query worker") from exc
         response.status_code = 202
         return QueryAccepted(job_id=job_id, status="pending")
 
@@ -228,7 +257,13 @@ def create_app(
         if job is None:
             raise HTTPException(status_code=404, detail=f"job {job_id} not found")
         result = QueryResponse.model_validate(job.result) if job.result is not None else None
-        return QueryStatus(job_id=job.id, status=job.status, result=result, error=job.error)
+        return QueryStatus(
+            job_id=job.id,
+            status=job.status,
+            progress=job.progress,
+            result=result,
+            error=job.error,
+        )
 
     @app.get("/api/graph/{arxiv_id}")
     def graph(arxiv_id: str) -> GraphResponse:

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 
@@ -9,11 +9,13 @@ class Job:
     question: str
     result: dict[str, Any] | None
     error: str | None
+    progress: list[dict[str, str]] = field(default_factory=list)
 
 
 class JobStore(Protocol):
     def create(self, question: str) -> str: ...
     def get(self, job_id: str) -> Job | None: ...
     def mark_running(self, job_id: str) -> None: ...
+    def set_progress(self, job_id: str, progress: list[dict[str, str]]) -> None: ...
     def finish(self, job_id: str, result: dict[str, Any]) -> None: ...
     def fail(self, job_id: str, error: str) -> None: ...

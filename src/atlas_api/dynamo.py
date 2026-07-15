@@ -100,16 +100,21 @@ class DynamoJobStore:
             return None
         result = item.get("result")
         error = item.get("error")
+        progress = item.get("progress")
         return Job(
             id=job_id,
             status=str(item["status"]),
             question=str(item.get("question", "")),
             result=json.loads(result) if result else None,
             error=str(error) if error else None,
+            progress=json.loads(progress) if progress else [],
         )
 
     def mark_running(self, job_id: str) -> None:
         self._patch(job_id, status="running")
+
+    def set_progress(self, job_id: str, progress: list[dict[str, str]]) -> None:
+        self._patch(job_id, progress=json.dumps(progress))
 
     def finish(self, job_id: str, result: dict[str, Any]) -> None:
         self._patch(job_id, status="done", result=json.dumps(result))
