@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { arxivUrl, CitedMarkdown, flashPaper } from "./citations";
 import {
   ApiError,
   getJob,
@@ -88,7 +88,7 @@ export default function App() {
   const startedAt = useRef<Record<Mode, number>>({ map: 0, ask: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { question, phase, exploreId, activeQuery } = tabs[mode];
+  const { question, phase, activeQuery } = tabs[mode];
   const patchTab = (m: Mode, patch: Partial<TabState>) =>
     setTabs((prev) => ({ ...prev, [m]: { ...prev[m], ...patch } }));
 
@@ -594,6 +594,14 @@ function Result({
   exploreId: string | null;
   onExplore: (arxivId: string | null) => void;
 }) {
+  const papersRef = useRef<HTMLElement>(null);
+  // A citation jumps to the paper's entry in the list below; every cited id is one of these
+  // papers, so the arXiv fallback is only a guard against a shape that should not occur.
+  const reveal = (id: string) => {
+    const el = papersRef.current?.querySelector(`[data-paper="${id}"]`);
+    if (el) flashPaper(el);
+    else window.open(arxivUrl(id), "_blank", "noopener");
+  };
   return (
     <>
       <section className="card brief">
@@ -613,15 +621,15 @@ function Result({
             gathered, grouped by paper.
           </p>
         )}
-        <ReactMarkdown>{result.brief}</ReactMarkdown>
+        <CitedMarkdown onCite={reveal}>{result.brief}</CitedMarkdown>
       </section>
-      <section className="card papers">
+      <section className="card papers" ref={papersRef}>
         <h2>
           Cited papers <span className="count">{result.papers.length}</span>
         </h2>
         <ul>
           {result.papers.map((p) => (
-            <li key={p.arxiv_id}>
+            <li key={p.arxiv_id} data-paper={p.arxiv_id}>
               <div className="paper-main">
                 <a
                   className="paper-title"

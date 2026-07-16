@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { type Ref, useEffect, useRef, useState } from "react";
 import type { Direction, LandscapeResult } from "./api";
+import { arxivUrl, CitedMarkdown, flashPaper, linkifyCitations } from "./citations";
 import { SERIES } from "./palette";
 import { useDarkMode } from "./useDarkMode";
 
@@ -15,6 +15,37 @@ export default function LandscapeView({
   selectedId: string | null;
   onSelect: (arxivId: string | null) => void;
 }) {
+  // A cited paper lives inside its direction's (collapsed, lazy) list, so revealing it means
+  // expanding that direction and then, once it has rendered, scrolling to the entry. `pending`
+  // carries the id across that render into the effect below.
+  const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
+  const [pending, setPending] = useState<string | null>(null);
+  const panelRef = useRef<HTMLElement>(null);
+
+  const toggleDir = (i: number) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+
+  const reveal = (id: string) => {
+    const idx = result.directions.findIndex((d) => d.papers.some((p) => p.arxiv_id === id));
+    if (idx < 0) {
+      window.open(arxivUrl(id), "_blank", "noopener");
+      return;
+    }
+    setOpen((prev) => (prev.has(idx) ? prev : new Set(prev).add(idx)));
+    setPending(id);
+  };
+
+  useEffect(() => {
+    if (!pending) return;
+    flashPaper(panelRef.current?.querySelector(`[data-paper="${pending}"]`));
+    setPending(null);
+  }, [pending]);
+
   if (result.declined) {
     return (
       <section className="card">
@@ -34,13 +65,13 @@ export default function LandscapeView({
           </div>
         )}
         <h2>The landscape</h2>
-        <ReactMarkdown>{result.overview}</ReactMarkdown>
+        <CitedMarkdown onCite={reveal}>{result.overview}</CitedMarkdown>
         {result.key_ideas.length > 0 && (
           <>
             <h3 className="landscape-sub">Key ideas</h3>
             <ul className="key-ideas">
               {result.key_ideas.map((idea) => (
-                <li key={idea}>{idea}</li>
+                <li key={idea}>{linkifyCitations(idea, reveal)}</li>
               ))}
             </ul>
           </>
@@ -55,6 +86,9 @@ export default function LandscapeView({
         directions={result.directions}
         selectedId={selectedId}
         onSelect={onSelect}
+        open={open}
+        onToggle={toggleDir}
+        panelRef={panelRef}
       />
 
       <div className="two-col">
@@ -71,7 +105,7 @@ export default function LandscapeView({
                   >
                     {r.title || r.arxiv_id}
                   </a>
-                  <span className="reading-reason">{r.reason}</span>
+                  <span className="reading-reason">{linkifyCitations(r.reason, reveal)}</span>
                 </li>
               ))}
             </ol>
@@ -82,7 +116,7 @@ export default function LandscapeView({
             <h2>Open problems</h2>
             <ul className="open-problems">
               {result.open_problems.map((p) => (
-                <li key={p}>{p}</li>
+                <li key={p}>{linkifyCitations(p, reveal)}</li>
               ))}
             </ul>
           </section>
@@ -96,80 +130,70 @@ function DirectionsPanel({
   directions,
   selectedId,
   onSelect,
+  open,
+  onToggle,
+  panelRef,
 }: {
   directions: Direction[];
   selectedId: string | null;
   onSelect: (arxivId: string | null) => void;
+  // Expansion is owned by the parent so a citation click can open the direction holding the
+  // cited paper before scrolling to it.
+  open: ReadonlySet<number>;
+  onToggle: (i: number) => void;
+  panelRef: Ref<HTMLElement>;
 }) {
   const dark = useDarkMode();
   const colors = SERIES[dark ? "dark" : "light"];
-  const [active, setActive] = useState(0);
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const direction = directions[Math.min(active, directions.length - 1)];
-
-  // Roving tabs: arrow keys move focus and selection, per the WAI-ARIA tabs pattern.
-  function onKey(e: React.KeyboardEvent) {
-    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-    e.preventDefault();
-    const delta = e.key === "ArrowRight" ? 1 : -1;
-    const next = (active + delta + directions.length) % directions.length;
-    setActive(next);
-    tabRefs.current[next]?.focus();
-  }
 
   return (
-    <section className="card">
+    <section className="card" ref={panelRef}>
       <h2>Research directions</h2>
-      <div className="tabs" role="tablist" aria-label="Research directions" onKeyDown={onKey}>
-        {directions.map((d, i) => (
-          <button
-            key={d.name}
-            ref={(el) => {
-              tabRefs.current[i] = el;
-            }}
-            role="tab"
-            id={`dir-tab-${i}`}
-            aria-controls="dir-panel"
-            aria-selected={i === active}
-            tabIndex={i === active ? 0 : -1}
-            className={i === active ? "tab active" : "tab"}
-            onClick={() => setActive(i)}
-          >
-            <span className="swatch" style={{ background: colors[i % colors.length] }} />
-            {d.name}
-            <span className="count">{d.papers.length}</span>
-          </button>
-        ))}
-      </div>
-      {direction && (
-        <div
-          id="dir-panel"
-          role="tabpanel"
-          aria-labelledby={`dir-tab-${Math.min(active, directions.length - 1)}`}
-        >
-          <p className="direction-problem">{direction.problem}</p>
-          <ul className="direction-papers">
-            {direction.papers.map((p) => (
-              <li key={p.arxiv_id}>
-                <a
-                  href={`https://arxiv.org/abs/${p.arxiv_id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {p.title}
-                </a>
-                <span className="paper-month">{p.published_month}</span>
-                <button
-                  className={selectedId === p.arxiv_id ? "explore active" : "explore"}
-                  onClick={() => onSelect(selectedId === p.arxiv_id ? null : p.arxiv_id)}
-                >
-                  {selectedId === p.arxiv_id ? "on map" : "show on map"}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <ul className="directions">
+        {directions.map((d, i) => {
+          const expanded = open.has(i);
+          return (
+            <li key={d.name} className="direction">
+              <div className="direction-head">
+                <span className="swatch" style={{ background: colors[i % colors.length] }} />
+                <h3 className="direction-name">{d.name}</h3>
+                <span className="count">{d.papers.length}</span>
+              </div>
+              <p className="direction-problem">{linkifyCitations(d.problem)}</p>
+              <button
+                className="view-papers"
+                aria-expanded={expanded}
+                aria-controls={`dir-papers-${i}`}
+                onClick={() => onToggle(i)}
+              >
+                {expanded ? "Hide papers" : `View papers (${d.papers.length})`}
+              </button>
+              {expanded && (
+                <ul id={`dir-papers-${i}`} className="direction-papers">
+                  {d.papers.map((p) => (
+                    <li key={p.arxiv_id} data-paper={p.arxiv_id}>
+                      <a
+                        href={`https://arxiv.org/abs/${p.arxiv_id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {p.title}
+                      </a>
+                      <span className="paper-month">{p.published_month}</span>
+                      <button
+                        className={selectedId === p.arxiv_id ? "explore active" : "explore"}
+                        onClick={() => onSelect(selectedId === p.arxiv_id ? null : p.arxiv_id)}
+                      >
+                        {selectedId === p.arxiv_id ? "on map" : "show on map"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

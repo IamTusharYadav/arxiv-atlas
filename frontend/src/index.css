@@ -688,6 +688,29 @@ footer {
   color: var(--accent);
 }
 
+/* Citation links sit in prose outside .brief too (open problems, reading reasons, direction
+   summaries); keep them on-brand rather than browser-default blue. */
+.open-problems a,
+.reading-reason a,
+.direction-problem a {
+  color: var(--accent);
+}
+
+/* Brief flash on the paper a citation just scrolled to, so the eye lands on the right row. */
+@keyframes cite-flash {
+  from {
+    background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.cite-flash {
+  animation: cite-flash 1.2s ease-out;
+  border-radius: 6px;
+}
+
 .brief code {
   font-size: 0.875em;
   background: var(--bg);
@@ -921,8 +944,56 @@ footer {
   font-size: 0.8rem;
 }
 
+.directions {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+}
+
+.direction {
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.direction:first-child {
+  border-top: none;
+  padding-top: 0.35rem;
+}
+
+.direction-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.direction-name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.view-papers {
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.25rem 0.7rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.view-papers:hover,
+.view-papers[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
 .direction-problem {
-  margin: 0 0 0.5rem;
+  margin: 0.45rem 0 0.6rem;
   color: var(--muted);
   font-size: 0.9rem;
 }
