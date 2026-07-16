@@ -173,13 +173,22 @@ Resources:
             - Effect: Allow
               Action: lambda:InvokeFunction
               Resource: !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-*"
+      # Split by method rather than ANY so no Lambda route matches OPTIONS. With CORS configured
+      # and no OPTIONS route, API Gateway answers the preflight itself (204); ANY would route it
+      # to FastAPI, which has no OPTIONS handler and 405s, failing every cross-origin POST.
       Events:
-        Proxy:
+        Get:
           Type: HttpApi
           Properties:
             ApiId: !Ref Api
             Path: /{proxy+}
-            Method: ANY
+            Method: GET
+        Post:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /{proxy+}
+            Method: POST
 
   # Alarms notify through this topic; the email subscription is added only when AlertEmail is set.
   AlarmTopic:

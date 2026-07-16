@@ -1,6 +1,11 @@
-# Static host for the ArXiv Atlas frontend. Import this from the main Caddyfile:
+# Static host for the ArXiv Atlas frontend. Caddy runs as a container in the box's edge stack
+# (~/edge), which imports every file in its sites directory; copy this in as:
 #
-#   import /etc/caddy/sites/atlas.caddyfile
+#   ~/edge/sites/atlas.caddyfile
+#
+# The root below is a container path, and resolves only because the edge stack bind-mounts the
+# host's /var/www/atlas at the same path. That host directory is where
+# scripts/deploy_frontend.sh rsyncs the build, so a frontend deploy never touches Docker.
 #
 # It serves the built assets only. The browser calls the query API directly at its API Gateway
 # URL (baked into the bundle at build time by scripts/deploy_frontend.sh), so there is no proxy
