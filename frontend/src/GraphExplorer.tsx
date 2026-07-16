@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import { getGraph } from "./api";
 import { merge, NODE_CAP, type GLink, type GNode, type GraphData } from "./graphMerge";
+import { useDarkMode } from "./useDarkMode";
 
 // Categorical palette, slots assigned in fixed order to the corpus categories; anything else
 // folds into muted ink rather than minting a fourth hue. Both modes validated against the
@@ -19,20 +20,14 @@ function esc(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function useDarkMode(): boolean {
-  const [dark, setDark] = useState(
-    () => window.matchMedia("(prefers-color-scheme: dark)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (e: MediaQueryListEvent) => setDark(e.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-  return dark;
-}
 
-export default function GraphExplorer({ rootId }: { rootId: string }) {
+export default function GraphExplorer({
+  rootId,
+  rootTitle,
+}: {
+  rootId: string;
+  rootTitle?: string;
+}) {
   const dark = useDarkMode();
   const mode = dark ? "dark" : "light";
   const [data, setData] = useState<GraphData>({ nodes: [], links: [] });
@@ -101,10 +96,10 @@ export default function GraphExplorer({ rootId }: { rootId: string }) {
 
   return (
     <section className="card graph">
-      <h2>Neighborhood of {rootId}</h2>
+      <h2>Related work</h2>
       <p className="hint">
-        Click a node to pull in its semantic neighbors. Edge length is layout only; edge width
-        tracks similarity.
+        Semantic neighbors of <strong>{rootTitle ?? rootId}</strong>. Click a node to pull in its
+        own neighbors; edge width tracks similarity, edge length is layout only.
       </p>
       <div className="legend">
         {present.map((c) => (

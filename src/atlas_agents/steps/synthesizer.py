@@ -7,16 +7,29 @@ from atlas_agents.steps.evidence import paper_block
 from atlas_agents.steps.extractor import PaperClaims
 from atlas_core.vectorstore import ScoredPaper
 
-# New-style (2507.01234) and old-style (cs/0112017) arXiv ids in [brackets].
-_CITATION = re.compile(r"\[([a-zA-Z.-]+/\d{7}|\d{4}\.\d{4,5})\]")
+# Bracket groups, then new-style (2507.01234) and old-style (cs/0112017) arXiv ids inside
+# them. Two stages because models legitimately group citations ([2507.01234, 2507.05678]),
+# and a single-id pattern would let every id in a group bypass the grounding check.
+_BRACKET = re.compile(r"\[([^\]]{1,200})\]")
+_ARXIV_ID = re.compile(r"(?<![\w./])([a-zA-Z.-]+/\d{7}|\d{4}\.\d{4,5})(?![\w./])")
 
 
 class UngroundedCitations(AgentError):
     """The brief cited ids outside the evidence even after one repair attempt."""
 
 
-def _invented(markdown: str, known: set[str]) -> set[str]:
-    return {m.group(1) for m in _CITATION.finditer(markdown)} - known
+def cited_ids(markdown: str) -> set[str]:
+    """Every arXiv id cited in [brackets], including comma-grouped citations."""
+    return {
+        m.group(1)
+        for group in _BRACKET.finditer(markdown)
+        for m in _ARXIV_ID.finditer(group.group(1))
+    }
+
+
+def invented_citations(markdown: str, known: set[str]) -> set[str]:
+    """Cited ids not present in the evidence; the landscape pipeline shares this check."""
+    return cited_ids(markdown) - known
 
 
 def synthesize(
@@ -41,7 +54,7 @@ def synthesize(
     completion = client.complete(
         model=SYNTHESIZER.model, system=SYNTHESIZER.system, prompt=prompt, max_tokens=2000
     )
-    invented = _invented(completion.text, known)
+    invented = invented_citations(completion.text, known)
     if invented:
         repair = client.complete(
             model=SYNTHESIZER.model,
@@ -58,7 +71,7 @@ def synthesize(
             version=SYNTHESIZER.version,
         )
         completion = repair
-        invented = _invented(completion.text, known)
+        invented = invented_citations(completion.text, known)
         if invented:
             ctx.record(
                 "synthesizer",
@@ -73,7 +86,7 @@ def synthesize(
                 trace=list(ctx.trace),
             )
 
-    cited = {m.group(1) for m in _CITATION.finditer(completion.text)}
+    cited = cited_ids(completion.text)
     ctx.record(
         "synthesizer",
         f"brief citing {len(cited)} papers",

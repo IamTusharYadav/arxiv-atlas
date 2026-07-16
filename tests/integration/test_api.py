@@ -11,6 +11,7 @@ from atlas_api.app import run_job
 from atlas_api.jobs import Job
 from atlas_core.budget import DailyBudgetGuard
 from atlas_core.cache import ResponseCache
+from atlas_core.embedding import QUERY_PREFIX
 from atlas_core.models import Edge
 from atlas_core.ratelimit import RateLimiter
 from atlas_core.vectorstore import QdrantStore
@@ -18,6 +19,7 @@ from tests.conftest import FakeEmbedder, make_bedrock_client, make_message
 from tests.unit.test_ask import IDS, check_json, extract_json, plan_json, rerank_json, seed
 from tests.unit.test_budget import _FakeTable
 from tests.unit.test_cache import _FakeStore
+from tests.unit.test_landscape import direction_json, landscape_json, landscape_seed
 from tests.unit.test_ratelimit import MemoryBuckets
 
 
@@ -25,9 +27,9 @@ class MemoryJobStore:
     def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}
 
-    def create(self, question: str) -> str:
+    def create(self, question: str, kind: str = "query") -> str:
         job_id = f"job-{len(self._jobs)}"
-        self._jobs[job_id] = Job(job_id, "pending", question, None, None)
+        self._jobs[job_id] = Job(job_id, "pending", question, None, None, kind=kind)
         return job_id
 
     def get(self, job_id: str) -> Job | None:
@@ -365,6 +367,98 @@ def test_query_status_recent_running_job_stays_running(memory_store: QdrantStore
 def test_query_status_unknown_job_404(memory_store: QdrantStore) -> None:
     api = async_client(memory_store, [], MemoryJobStore())
     assert api.get("/api/query/nope").status_code == 404
+
+
+def landscape_messages(cite_id: str) -> list[Message | Exception]:
+    return [
+        make_message(plan_json()),
+        make_message(direction_json("A")),
+        make_message(direction_json("B")),
+        make_message(direction_json("C")),
+        make_message(landscape_json(cite_id, cite_id), model=SONNET),
+    ]
+
+
+def test_landscape_returns_directions_timeline_and_reading_order(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    ids = landscape_seed(memory_store)
+    api = client_for(memory_store, landscape_messages(ids[0][0]))
+
+    resp = api.post("/api/landscape", json={"topic": "kv cache"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["declined"] is False
+    assert f"[{ids[0][0]}]" in body["overview"]
+    assert len(body["directions"]) == 3
+    assert all(len(d["papers"]) == 4 for d in body["directions"])
+    assert body["directions"][0]["papers"][0]["published_month"].startswith("2025-")
+    assert body["reading_order"][0]["arxiv_id"] == ids[0][0]
+    assert body["reading_order"][0]["title"]  # resolved from the retrieved papers
+    assert len(body["timeline"]) == 3
+    assert body["cost_usd"] > 0
+
+
+def test_landscape_cache_is_isolated_from_query_cache(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    # Same text through both routes embeds identically; without the kind namespace the
+    # landscape lookup would return the cached query brief and fail shape validation.
+    ids = landscape_seed(memory_store)
+    text = "kv cache"
+    cache = ResponseCache(_FakeStore())
+    brief = {"brief": "A cached brief.", "papers": [], "trace": [], "cost_usd": 0.01}
+    cache.put(fake_embedder.embed([QUERY_PREFIX + text])[0], brief, kind="query")
+    api = client_for(memory_store, landscape_messages(ids[0][0]), cache=cache)
+
+    # the very same embedding hits on the query route...
+    hit = api.post("/api/query", json={"question": text})
+    assert hit.status_code == 200 and hit.json()["cached"] is True
+
+    # ...but not on the landscape route, which runs the scripted pipeline instead
+    first = api.post("/api/landscape", json={"topic": text})
+    assert first.status_code == 200
+    assert first.json()["cached"] is False
+
+    second = api.post("/api/landscape", json={"topic": text})
+    assert second.status_code == 200
+    assert second.json()["cached"] is True  # while the landscape entry itself hits
+
+
+def test_async_landscape_enqueues_then_completes(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    ids = landscape_seed(memory_store)
+    api = async_client(memory_store, landscape_messages(ids[0][0]), MemoryJobStore())
+
+    accepted = api.post("/api/landscape", json={"topic": "kv cache"})
+    assert accepted.status_code == 202
+    job_id = accepted.json()["job_id"]
+
+    body = api.get(f"/api/landscape/{job_id}").json()
+    assert body["status"] == "done"
+    assert len(body["result"]["directions"]) == 3
+    steps = [s["step"] for s in body["progress"]]
+    assert steps[0] == "planner" and steps[-1] == "landscape"
+    # a landscape job id is not found on the query route: wrong result shape over there
+    assert api.get(f"/api/query/{job_id}").status_code == 404
+
+
+def test_landscape_decline_is_returned_but_never_cached(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)  # 3 papers, below MIN_PAPERS
+    cache = ResponseCache(_FakeStore())
+    api = client_for(memory_store, [make_message(plan_json())], cache=cache)
+
+    body = api.post("/api/landscape", json={"topic": "kv cache"}).json()
+
+    assert body["declined"] is True
+    assert body["directions"] == []
+    assert (
+        cache.get(fake_embedder.embed(["kv cache"])[0], kind="landscape") is None
+    )  # a decline is never pinned for the TTL
 
 
 def test_query_status_404_when_async_disabled(

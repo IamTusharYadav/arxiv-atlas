@@ -33,12 +33,54 @@ export interface ProgressStep {
   summary: string;
 }
 
-export interface JobStatus {
+export interface JobStatus<T> {
   job_id: string;
   status: string; // pending | running | done | error
   progress: ProgressStep[];
-  result: QueryResult | null;
+  result: T | null;
   error: string | null;
+}
+
+export interface LandscapePaper {
+  arxiv_id: string;
+  title: string;
+  primary_category: string;
+  published_month: string; // "YYYY-MM"
+}
+
+export interface Direction {
+  name: string;
+  problem: string;
+  papers: LandscapePaper[]; // most-central-first
+  representative_ids: string[];
+}
+
+export interface TimelinePoint {
+  month: string;
+  direction: string;
+  count: number;
+}
+
+export interface ReadingStep {
+  arxiv_id: string;
+  title: string;
+  reason: string;
+}
+
+export interface LandscapeResult {
+  topic: string;
+  overview: string;
+  key_ideas: string[];
+  directions: Direction[];
+  timeline: TimelinePoint[];
+  reading_order: ReadingStep[];
+  open_problems: string[];
+  trace: TraceStep[];
+  cost_usd: number;
+  cached: boolean;
+  // The pipeline stopped before mapping (out of scope or too few papers);
+  // the overview carries the explanation and every list is empty.
+  declined: boolean;
 }
 
 export interface CorpusStatus {
@@ -87,29 +129,45 @@ async function detail(resp: Response): Promise<string> {
   return `${resp.status} ${resp.statusText}`;
 }
 
-export type PostOutcome =
-  | { kind: "done"; result: QueryResult } // semantic cache hit answers inline
-  | { kind: "accepted"; jobId: string }; // enqueued; poll getJob until terminal
+export type PostOutcome<T> =
+  | { kind: "done"; result: T } // semantic cache hit answers inline
+  | { kind: "accepted"; jobId: string }; // enqueued; poll the job until terminal
 
-export async function postQuery(question: string): Promise<PostOutcome> {
-  const resp = await fetch(`${API_BASE}/api/query`, {
+async function post<T>(path: string, body: object): Promise<PostOutcome<T>> {
+  const resp = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify(body),
   });
-  if (resp.status === 200) return { kind: "done", result: (await resp.json()) as QueryResult };
+  if (resp.status === 200) return { kind: "done", result: (await resp.json()) as T };
   if (resp.status === 202) {
-    const body = (await resp.json()) as { job_id: string };
-    return { kind: "accepted", jobId: body.job_id };
+    const accepted = (await resp.json()) as { job_id: string };
+    return { kind: "accepted", jobId: accepted.job_id };
   }
   const retryAfter = Number(resp.headers.get("retry-after"));
   throw new ApiError(await detail(resp), resp.status, isNaN(retryAfter) ? undefined : retryAfter);
 }
 
-export async function getJob(jobId: string): Promise<JobStatus> {
-  const resp = await fetch(`${API_BASE}/api/query/${jobId}`);
+export function postQuery(question: string): Promise<PostOutcome<QueryResult>> {
+  return post("/api/query", { question });
+}
+
+export function postLandscape(topic: string): Promise<PostOutcome<LandscapeResult>> {
+  return post("/api/landscape", { topic });
+}
+
+async function job<T>(path: string): Promise<JobStatus<T>> {
+  const resp = await fetch(`${API_BASE}${path}`);
   if (!resp.ok) throw new ApiError(await detail(resp), resp.status);
-  return (await resp.json()) as JobStatus;
+  return (await resp.json()) as JobStatus<T>;
+}
+
+export function getJob(jobId: string): Promise<JobStatus<QueryResult>> {
+  return job(`/api/query/${jobId}`);
+}
+
+export function getLandscapeJob(jobId: string): Promise<JobStatus<LandscapeResult>> {
+  return job(`/api/landscape/${jobId}`);
 }
 
 export async function getStatus(): Promise<CorpusStatus> {

@@ -61,6 +61,7 @@ class DynamoCacheStore:
                 embedding=json.loads(i["embedding"]),
                 payload=json.loads(i["payload"]),
                 expires_at=float(i["expires_at"]),
+                kind=str(i.get("kind", "query")),  # rows written before the field existed
             )
             for i in items
         ]
@@ -74,6 +75,7 @@ class DynamoCacheStore:
                 "embedding": json.dumps(entry.embedding),
                 "payload": json.dumps(entry.payload),
                 "expires_at": Decimal(int(entry.expires_at)),
+                "kind": entry.kind,
             }
         )
 
@@ -82,13 +84,14 @@ class DynamoJobStore:
     def __init__(self, table: _Table) -> None:
         self._table = table
 
-    def create(self, question: str) -> str:
+    def create(self, question: str, kind: str = "query") -> str:
         job_id = uuid4().hex
         self._table.put_item(
             Item={
                 "pk": job_id,
                 "status": "pending",
                 "question": question,
+                "kind": kind,
                 "updated_at": Decimal(int(time())),
                 "expires_at": Decimal(int(time()) + _JOB_TTL_S),
             }
@@ -111,6 +114,7 @@ class DynamoJobStore:
             error=str(error) if error else None,
             progress=json.loads(progress) if progress else [],
             updated_at=float(updated_at) if updated_at is not None else None,
+            kind=str(item.get("kind", "query")),  # rows written before the field existed
         )
 
     def mark_running(self, job_id: str) -> None:

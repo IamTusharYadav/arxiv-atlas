@@ -49,3 +49,13 @@ def test_still_invented_after_repair_raises() -> None:
     )
     with pytest.raises(UngroundedCitations, match=r"1234\.56789"):
         synthesize(client, RunContext(), "kv cache?", PAPERS, CLAIMS)
+
+
+def test_grouped_citations_cannot_bypass_grounding() -> None:
+    # The first live landscape grouped ids inside one bracket ([a, b]); a single-id pattern
+    # would treat the whole group as non-citation text and let invented ids sail through.
+    from atlas_agents.steps.synthesizer import invented_citations
+
+    text = "Grouped [2507.00001, 9999.99999] and old-style [cs/0112017] and prose [see above]."
+    assert invented_citations(text, known={"2507.00001", "cs/0112017"}) == {"9999.99999"}
+    assert invented_citations("versioned [2507.00001v2] never matches", known=set()) == set()

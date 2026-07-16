@@ -61,10 +61,11 @@ export default function StatusPage() {
           arXiv abstracts in cs.AI, cs.LG and cs.CL, refreshed nightly
         </dd>
 
-        <dt>Spend controls</dt>
+        <dt>Availability</dt>
         <dd>
-          A per-query cap and a fail-closed daily cap bound cost. When the daily cap is reached,
-          live queries pause and saved example runs are served until the next UTC day.
+          Each question runs under a fixed work limit, and a daily ceiling protects the service
+          as a whole. When the ceiling is reached, live answers pause until the next UTC day and
+          saved example runs are served instead.
         </dd>
       </dl>
       <p className="hint">

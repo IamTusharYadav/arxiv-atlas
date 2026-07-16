@@ -2,7 +2,7 @@ import uuid
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from qdrant_client import QdrantClient
 from qdrant_client import models as qm
@@ -38,6 +38,8 @@ class VectorStore(Protocol):
     def search(self, vector: Sequence[float], limit: int) -> list[ScoredPaper]: ...
 
     def get(self, arxiv_ids: Sequence[str]) -> list[StoredPaper]: ...
+
+    def get_vectors(self, arxiv_ids: Sequence[str]) -> dict[str, list[float]]: ...
 
     def set_edges(self, arxiv_id: str, edges: Sequence[Edge]) -> None: ...
 
@@ -104,6 +106,23 @@ class QdrantStore:
             self._collection, ids=[point_id(a) for a in arxiv_ids], with_payload=True
         )
         return [_stored_from_payload(p.payload) for p in points if p.payload is not None]
+
+    def get_vectors(self, arxiv_ids: Sequence[str]) -> dict[str, list[float]]:
+        """Stored embeddings by id, for clustering retrieved papers without re-embedding."""
+        points = self._client.retrieve(
+            self._collection,
+            ids=[point_id(a) for a in arxiv_ids],
+            with_payload=["arxiv_id"],
+            with_vectors=True,
+        )
+        out: dict[str, list[float]] = {}
+        for p in points:
+            if p.payload is None or not isinstance(p.vector, list):
+                continue
+            # unnamed single vectors are flat; the list[list] case is multivector configs
+            # this collection never uses
+            out[str(p.payload["arxiv_id"])] = [float(x) for x in cast("list[float]", p.vector)]
+        return out
 
     def set_edges(self, arxiv_id: str, edges: Sequence[Edge]) -> None:
         self._client.set_payload(

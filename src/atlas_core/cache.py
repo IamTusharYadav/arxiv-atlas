@@ -18,6 +18,9 @@ class CacheEntry:
     embedding: list[float]
     payload: dict[str, Any]  # the caller's serialized answer; opaque to the cache
     expires_at: float
+    # Namespace: a question brief and a topic landscape can embed near-identically, and
+    # serving one for the other would fail validation at best. Old rows default to "query".
+    kind: str = "query"
 
 
 class CacheStore(Protocol):
@@ -37,7 +40,9 @@ class ResponseCache:
         self._floor = similarity_floor
         self._ttl_s = ttl_s
 
-    def get(self, embedding: npt.NDArray[np.float32]) -> dict[str, Any] | None:
+    def get(
+        self, embedding: npt.NDArray[np.float32], *, kind: str = "query"
+    ) -> dict[str, Any] | None:
         try:
             candidates = self._store.recent()
         except Exception as err:
@@ -49,18 +54,21 @@ class ResponseCache:
         best: CacheEntry | None = None
         best_sim = self._floor
         for entry in candidates:
-            if entry.expires_at <= now:
+            if entry.kind != kind or entry.expires_at <= now:
                 continue
             sim = float(np.dot(embedding, np.asarray(entry.embedding, dtype=np.float32)))
             if sim >= best_sim:
                 best, best_sim = entry, sim
         return best.payload if best is not None else None
 
-    def put(self, embedding: npt.NDArray[np.float32], payload: dict[str, Any]) -> None:
+    def put(
+        self, embedding: npt.NDArray[np.float32], payload: dict[str, Any], *, kind: str = "query"
+    ) -> None:
         entry = CacheEntry(
             embedding=[float(x) for x in embedding],
             payload=payload,
             expires_at=time() + self._ttl_s,
+            kind=kind,
         )
         try:
             self._store.put(entry)

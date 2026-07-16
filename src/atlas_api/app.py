@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field
 from atlas_agents.ask import ask
 from atlas_agents.bedrock import BedrockClient, StructuredOutputError
 from atlas_agents.harness import AgentError, StepRecord, StepSink
-from atlas_api.jobs import JobStore
+from atlas_agents.landscape import Landscape, map_topic
+from atlas_api.jobs import Job, JobStore
 from atlas_core.budget import DailyBudgetExceeded, DailyBudgetGuard
 from atlas_core.cache import ResponseCache
 from atlas_core.embedding import QUERY_PREFIX, Embedder
@@ -65,6 +66,58 @@ class QueryStatus(BaseModel):
     status: str
     progress: list[dict[str, str]] = []
     result: QueryResponse | None = None
+    error: str | None = None
+
+
+class LandscapeRequest(BaseModel):
+    topic: str = Field(min_length=1, max_length=200)
+
+
+class LandscapePaper(BaseModel):
+    arxiv_id: str
+    title: str
+    primary_category: str
+    published_month: str  # "YYYY-MM", enough for the activity timeline drill-down
+
+
+class DirectionOut(BaseModel):
+    name: str
+    problem: str
+    papers: list[LandscapePaper]  # most-central-first
+    representative_ids: list[str]
+
+
+class TimelinePointOut(BaseModel):
+    month: str
+    direction: str
+    count: int
+
+
+class ReadingStepOut(BaseModel):
+    arxiv_id: str
+    title: str
+    reason: str
+
+
+class LandscapeResponse(BaseModel):
+    topic: str
+    overview: str
+    key_ideas: list[str]
+    directions: list[DirectionOut]
+    timeline: list[TimelinePointOut]
+    reading_order: list[ReadingStepOut]
+    open_problems: list[str]
+    trace: list[TraceStep]
+    cost_usd: float
+    cached: bool = False
+    declined: bool = False
+
+
+class LandscapeStatus(BaseModel):
+    job_id: str
+    status: str
+    progress: list[dict[str, str]] = []
+    result: LandscapeResponse | None = None
     error: str | None = None
 
 
@@ -162,6 +215,71 @@ def _answer(
     return response
 
 
+def _serialize_landscape(landscape: Landscape) -> LandscapeResponse:
+    titles = {p.arxiv_id: p.title for d in landscape.directions for p in d.papers}
+    return LandscapeResponse(
+        topic=landscape.topic,
+        overview=landscape.overview,
+        key_ideas=landscape.key_ideas,
+        directions=[
+            DirectionOut(
+                name=d.name,
+                problem=d.problem,
+                papers=[
+                    LandscapePaper(
+                        arxiv_id=p.arxiv_id,
+                        title=p.title,
+                        primary_category=p.primary_category,
+                        published_month=p.published_at.strftime("%Y-%m"),
+                    )
+                    for p in d.papers
+                ],
+                representative_ids=d.representative_ids,
+            )
+            for d in landscape.directions
+        ],
+        timeline=[
+            TimelinePointOut.model_validate(t, from_attributes=True) for t in landscape.timeline
+        ],
+        reading_order=[
+            ReadingStepOut(arxiv_id=r.arxiv_id, title=titles.get(r.arxiv_id, ""), reason=r.reason)
+            for r in landscape.reading_order
+        ],
+        open_problems=landscape.open_problems,
+        trace=[TraceStep.model_validate(r, from_attributes=True) for r in landscape.trace],
+        cost_usd=landscape.cost_usd,
+        declined=landscape.declined,
+    )
+
+
+def _landscape(
+    topic: str,
+    *,
+    client: BedrockClient,
+    store: VectorStore,
+    embedder: Embedder,
+    cache: ResponseCache | None,
+    budget: DailyBudgetGuard | None,
+    sink: StepSink | None = None,
+) -> LandscapeResponse:
+    try:
+        landscape = map_topic(topic, client=client, store=store, embedder=embedder, sink=sink)
+    except AgentError as exc:
+        if budget is not None:
+            budget.charge(exc.spent_usd)
+        raise
+    response = _serialize_landscape(landscape)
+    if budget is not None:
+        budget.charge(landscape.cost_usd)
+    # A decline costs one planner call; caching it would pin "no landscape" for the whole TTL
+    # even after the corpus or phrasing would map fine.
+    if cache is not None and not response.declined:
+        cache.put(
+            embedder.embed([QUERY_PREFIX + topic])[0], response.model_dump(), kind="landscape"
+        )
+    return response
+
+
 def run_job(
     job_id: str,
     *,
@@ -178,24 +296,36 @@ def run_job(
     if job is None:
         return
     jobs.mark_running(job_id)
+    sink = _JobProgressSink(jobs, job_id)
     try:
-        response = _answer(
-            job.question,
-            client=client,
-            store=store,
-            embedder=embedder,
-            cache=cache,
-            budget=budget,
-            sink=_JobProgressSink(jobs, job_id),
-        )
+        if job.kind == "landscape":
+            result = _landscape(
+                job.question,
+                client=client,
+                store=store,
+                embedder=embedder,
+                cache=cache,
+                budget=budget,
+                sink=sink,
+            ).model_dump()
+        else:
+            result = _answer(
+                job.question,
+                client=client,
+                store=store,
+                embedder=embedder,
+                cache=cache,
+                budget=budget,
+                sink=sink,
+            ).model_dump()
     except (AgentError, StructuredOutputError) as exc:
         jobs.fail(job_id, str(exc))
         return
     except Exception:
-        log.exception("query job %s failed", job_id)
+        log.exception("%s job %s failed", job.kind, job_id)
         jobs.fail(job_id, "internal error")
         return
-    jobs.finish(job_id, response.model_dump())
+    jobs.finish(job_id, result)
 
 
 def create_app(
@@ -209,7 +339,7 @@ def create_app(
     jobs: JobStore | None = None,
     dispatch: Callable[[str], None] | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="ArXiv Atlas API", version="0.1.0")
+    app = FastAPI(title="ArXiv Atlas API", version="0.2.0")
 
     if limiter is not None:
         rl = limiter  # bound non-optional so the closure below type-checks
@@ -266,23 +396,32 @@ def create_app(
         response.status_code = 202
         return QueryAccepted(job_id=job_id, status="pending")
 
-    @app.get("/api/query/{job_id}")
-    def query_status(job_id: str) -> QueryStatus:
+    def _fetch_job(job_id: str, kind: str) -> Job:
+        # Kind is part of the identity: polling a landscape job on the query route (or vice
+        # versa) would validate the wrong result shape, so it is simply not found here.
         if jobs is None:
             raise HTTPException(status_code=404, detail="async jobs are not enabled")
         job = jobs.get(job_id)
-        if job is None:
+        if job is None or job.kind != kind:
             raise HTTPException(status_code=404, detail=f"job {job_id} not found")
+        return job
+
+    def _worker_died(job: Job) -> bool:
         # A worker that hard-crashed through its retry never writes a terminal status, which
         # would leave pollers on an eternal spinner until the row's TTL. The worker bumps
         # updated_at on every step, so silence longer than one whole worker lifetime (the
         # Lambda 900s ceiling) means it is dead. Read-only verdict: every poll computes the
         # same answer, and GETs never write.
-        if (
+        return (
             job.status in ("pending", "running")
             and job.updated_at is not None
             and time() - job.updated_at > STALE_JOB_S
-        ):
+        )
+
+    @app.get("/api/query/{job_id}")
+    def query_status(job_id: str) -> QueryStatus:
+        job = _fetch_job(job_id, "query")
+        if _worker_died(job):
             return QueryStatus(
                 job_id=job.id,
                 status="error",
@@ -291,6 +430,61 @@ def create_app(
             )
         result = QueryResponse.model_validate(job.result) if job.result is not None else None
         return QueryStatus(
+            job_id=job.id,
+            status=job.status,
+            progress=job.progress,
+            result=result,
+            error=job.error,
+        )
+
+    @app.post("/api/landscape")
+    def landscape(req: LandscapeRequest, response: Response) -> LandscapeResponse | QueryAccepted:
+        # Same order as the query route: rate-limit (middleware) -> cache -> budget -> agent.
+        if cache is not None:
+            hit = cache.get(embedder.embed([QUERY_PREFIX + req.topic])[0], kind="landscape")
+            if hit is not None:
+                return LandscapeResponse.model_validate(hit).model_copy(update={"cached": True})
+        if budget is not None:
+            try:
+                budget.check()
+            except DailyBudgetExceeded as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+        if jobs is None or dispatch is None:
+            try:
+                return _landscape(
+                    req.topic,
+                    client=client,
+                    store=store,
+                    embedder=embedder,
+                    cache=cache,
+                    budget=budget,
+                )
+            except (AgentError, StructuredOutputError) as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+        job_id = jobs.create(req.topic, kind="landscape")
+        try:
+            dispatch(job_id)
+        except Exception as exc:
+            log.exception("dispatch failed for landscape job %s", job_id)
+            jobs.fail(job_id, "could not start the landscape worker")
+            raise HTTPException(
+                status_code=503, detail="could not start the landscape worker"
+            ) from exc
+        response.status_code = 202
+        return QueryAccepted(job_id=job_id, status="pending")
+
+    @app.get("/api/landscape/{job_id}")
+    def landscape_status(job_id: str) -> LandscapeStatus:
+        job = _fetch_job(job_id, "landscape")
+        if _worker_died(job):
+            return LandscapeStatus(
+                job_id=job.id,
+                status="error",
+                progress=job.progress,
+                error="the landscape worker stopped responding; retry the topic",
+            )
+        result = LandscapeResponse.model_validate(job.result) if job.result is not None else None
+        return LandscapeStatus(
             job_id=job.id,
             status=job.status,
             progress=job.progress,
