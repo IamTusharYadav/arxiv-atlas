@@ -8,6 +8,7 @@ from atlas_agents.bedrock import SONNET
 from atlas_agents.landscape import MIN_PAPERS, map_topic
 from atlas_agents.steps.synthesizer import UngroundedCitations
 from atlas_core.embedding import CONTRACT
+from atlas_core.models import Edge
 from atlas_core.vectorstore import QdrantStore
 from tests.conftest import FakeEmbedder, make_bedrock_client, make_message, make_paper
 from tests.unit.test_ask import plan_json
@@ -73,6 +74,16 @@ def test_map_topic_builds_grounded_landscape(
 ) -> None:
     ids = landscape_seed(memory_store)
     first = ids[0][0]
+    # Stored edges: one within the landscape (plus its reverse, which must dedupe to one
+    # undirected link) and one dangling out of it (must be dropped).
+    memory_store.set_edges(first, [Edge(source=first, target=ids[0][1], weight=0.8)])
+    memory_store.set_edges(
+        ids[0][1],
+        [
+            Edge(source=ids[0][1], target=first, weight=0.8),
+            Edge(source=ids[0][1], target="9999.99999", weight=0.9),
+        ],
+    )
     client, fake = make_bedrock_client(
         [
             make_message(plan_json()),
@@ -103,6 +114,10 @@ def test_map_topic_builds_grounded_landscape(
         ("2025-06", 4),
         ("2025-07", 4),
     }
+    assert [(link.source, link.target) for link in landscape.links] in (
+        [(first, ids[0][1])],
+        [(ids[0][1], first)],
+    )  # one undirected link; the dangling edge is gone
     steps = [r.step for r in landscape.trace]
     assert steps[:2] == ["planner", "retriever"]
     assert steps.count("direction") == BLOBS

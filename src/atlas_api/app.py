@@ -69,6 +69,24 @@ class QueryStatus(BaseModel):
     error: str | None = None
 
 
+class GraphNode(BaseModel):
+    arxiv_id: str
+    title: str
+    primary_category: str
+
+
+class GraphLink(BaseModel):
+    source: str
+    target: str
+    weight: float
+
+
+class GraphResponse(BaseModel):
+    center: str
+    nodes: list[GraphNode]
+    links: list[GraphLink]
+
+
 class LandscapeRequest(BaseModel):
     topic: str = Field(min_length=1, max_length=200)
 
@@ -107,6 +125,8 @@ class LandscapeResponse(BaseModel):
     timeline: list[TimelinePointOut]
     reading_order: list[ReadingStepOut]
     open_problems: list[str]
+    # Semantic-similarity edges between the landscape's own papers, for the topic map.
+    links: list[GraphLink]
     trace: list[TraceStep]
     cost_usd: float
     cached: bool = False
@@ -119,24 +139,6 @@ class LandscapeStatus(BaseModel):
     progress: list[dict[str, str]] = []
     result: LandscapeResponse | None = None
     error: str | None = None
-
-
-class GraphNode(BaseModel):
-    arxiv_id: str
-    title: str
-    primary_category: str
-
-
-class GraphLink(BaseModel):
-    source: str
-    target: str
-    weight: float
-
-
-class GraphResponse(BaseModel):
-    center: str
-    nodes: list[GraphNode]
-    links: list[GraphLink]
 
 
 class StatusResponse(BaseModel):
@@ -246,6 +248,7 @@ def _serialize_landscape(landscape: Landscape) -> LandscapeResponse:
             for r in landscape.reading_order
         ],
         open_problems=landscape.open_problems,
+        links=[GraphLink.model_validate(e, from_attributes=True) for e in landscape.links],
         trace=[TraceStep.model_validate(r, from_attributes=True) for r in landscape.trace],
         cost_usd=landscape.cost_usd,
         declined=landscape.declined,

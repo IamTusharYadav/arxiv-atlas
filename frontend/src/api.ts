@@ -75,6 +75,8 @@ export interface LandscapeResult {
   timeline: TimelinePoint[];
   reading_order: ReadingStep[];
   open_problems: string[];
+  // Semantic-similarity edges between the landscape's own papers, for the topic map.
+  links: GraphLinkOut[];
   trace: TraceStep[];
   cost_usd: number;
   cached: boolean;

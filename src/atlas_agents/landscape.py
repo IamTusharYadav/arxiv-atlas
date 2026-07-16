@@ -19,7 +19,7 @@ from atlas_agents.steps.synthesizer import UngroundedCitations, invented_citatio
 from atlas_agents.tracing import query_trace
 from atlas_core.cluster import central_order, kmeans, pick_k
 from atlas_core.embedding import Embedder
-from atlas_core.models import Paper
+from atlas_core.models import Edge, Paper
 from atlas_core.vectorstore import VectorStore
 
 # One landscape is k+1 Haiku-class calls plus one Sonnet synthesis; measured runs should sit
@@ -70,6 +70,9 @@ class Landscape:
     timeline: list[TimelinePoint]
     reading_order: list[ReadingStep]
     open_problems: list[str]
+    # Stored semantic-similarity edges between the landscape's own papers, deduped as
+    # undirected pairs; the topic map renders them. Similarity, never citation.
+    links: list[Edge]
     trace: list[StepRecord]
     cost_usd: float
     # True when the pipeline stopped before mapping: out of scope, or too few papers.
@@ -166,6 +169,7 @@ def _build(
         timeline=_timeline(directions),
         reading_order=reading,
         open_problems=synthesis.open_problems,
+        links=_inner_links(store, visible),
         trace=ctx.trace,
         cost_usd=ctx.spent_usd,
     )
@@ -180,10 +184,27 @@ def _declined(topic: str, note: str, ctx: RunContext) -> Landscape:
         timeline=[],
         reading_order=[],
         open_problems=[],
+        links=[],
         trace=ctx.trace,
         cost_usd=ctx.spent_usd,
         declined=True,
     )
+
+
+def _inner_links(store: VectorStore, visible: set[str]) -> list[Edge]:
+    """Stored edges whose both ends are landscape papers, deduped as undirected pairs."""
+    links: list[Edge] = []
+    seen: set[tuple[str, str]] = set()
+    for stored in store.get(sorted(visible)):
+        for edge in stored.edges:
+            if edge.target not in visible:
+                continue
+            pair = (min(edge.source, edge.target), max(edge.source, edge.target))
+            if pair in seen:
+                continue
+            seen.add(pair)
+            links.append(edge)
+    return links
 
 
 def _timeline(directions: list[DirectionSummary]) -> list[TimelinePoint]:
