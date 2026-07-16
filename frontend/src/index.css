@@ -1142,45 +1142,55 @@ footer {
   color: var(--muted);
 }
 
-/* The table scrolls inside its own well; the page body never scrolls sideways. */
-.trace-scroll {
-  overflow-x: auto;
-  margin-top: 0.75rem;
+/* The pipeline reads as a numbered sequence: what each step did, in order, top to bottom. */
+.trace-steps {
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
 }
 
-.trace table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-  white-space: nowrap;
-}
-
-.trace th,
-.trace td {
-  text-align: left;
-  padding: 0.35rem 0.75rem 0.35rem 0;
+.trace-steps li {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
   border-bottom: 1px solid var(--border);
 }
 
-.trace th {
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.trace .num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  padding-right: 0;
-}
-
-.trace .step-cell {
-  font-weight: 600;
-}
-
-.trace tfoot td {
+.trace-steps li:last-child {
   border-bottom: none;
+}
+
+.trace-num {
+  flex: none;
+  width: 1.55rem;
+  height: 1.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
   color: var(--muted);
+  font-size: 0.75rem;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.trace-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.trace-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.trace-what {
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 /* Status page */

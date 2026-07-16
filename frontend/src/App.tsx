@@ -435,10 +435,7 @@ function Workspace({
         )}
 
         {(queryResult ?? landscape) && (
-          <TracePanel
-            trace={(queryResult ?? landscape)!.trace}
-            total={(queryResult ?? landscape)!.cost_usd}
-          />
+          <TracePanel trace={(queryResult ?? landscape)!.trace} />
         )}
       </div>
 
