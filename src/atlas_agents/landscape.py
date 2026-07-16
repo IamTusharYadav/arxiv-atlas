@@ -169,7 +169,7 @@ def _build(
         timeline=_timeline(directions),
         reading_order=reading,
         open_problems=synthesis.open_problems,
-        links=_inner_links(store, visible),
+        links=inner_links(store, visible),
         trace=ctx.trace,
         cost_usd=ctx.spent_usd,
     )
@@ -191,8 +191,9 @@ def _declined(topic: str, note: str, ctx: RunContext) -> Landscape:
     )
 
 
-def _inner_links(store: VectorStore, visible: set[str]) -> list[Edge]:
-    """Stored edges whose both ends are landscape papers, deduped as undirected pairs."""
+def inner_links(store: VectorStore, visible: set[str]) -> list[Edge]:
+    """Stored edges whose both ends are in the given paper set, deduped as undirected pairs.
+    Reused by the ask flow to link just the cited papers."""
     links: list[Edge] = []
     seen: set[tuple[str, str]] = set()
     for stored in store.get(sorted(visible)):

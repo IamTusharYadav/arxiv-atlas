@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from atlas_agents.ask import ask
 from atlas_agents.bedrock import BedrockClient, StructuredOutputError
 from atlas_agents.harness import AgentError, StepRecord, StepSink
-from atlas_agents.landscape import Landscape, map_topic
+from atlas_agents.landscape import Landscape, inner_links, map_topic
 from atlas_api.jobs import Job, JobStore
 from atlas_core.budget import DailyBudgetExceeded, DailyBudgetGuard
 from atlas_core.cache import ResponseCache
@@ -46,9 +46,30 @@ class TraceStep(BaseModel):
     cost_usd: float
 
 
+class GraphNode(BaseModel):
+    arxiv_id: str
+    title: str
+    primary_category: str
+
+
+class GraphLink(BaseModel):
+    source: str
+    target: str
+    weight: float
+
+
+class GraphResponse(BaseModel):
+    center: str
+    nodes: list[GraphNode]
+    links: list[GraphLink]
+
+
 class QueryResponse(BaseModel):
     brief: str
     papers: list[PaperOut]
+    # Semantic-similarity edges among the cited papers only, for the citation graph. Same
+    # source as the landscape map (stored edges, never citations); empty on older cache rows.
+    links: list[GraphLink] = []
     trace: list[TraceStep]
     cost_usd: float
     cached: bool = False
@@ -67,24 +88,6 @@ class QueryStatus(BaseModel):
     progress: list[dict[str, str]] = []
     result: QueryResponse | None = None
     error: str | None = None
-
-
-class GraphNode(BaseModel):
-    arxiv_id: str
-    title: str
-    primary_category: str
-
-
-class GraphLink(BaseModel):
-    source: str
-    target: str
-    weight: float
-
-
-class GraphResponse(BaseModel):
-    center: str
-    nodes: list[GraphNode]
-    links: list[GraphLink]
 
 
 class LandscapeRequest(BaseModel):
@@ -193,6 +196,9 @@ def _answer(
         if budget is not None:
             budget.charge(exc.spent_usd)
         raise
+    # Relationships among the cited papers only, from the same stored similarity edges the
+    # landscape map uses; nothing outside the citation set is pulled in.
+    cited_ids = {s.paper.arxiv_id for s in answer.papers}
     response = QueryResponse(
         brief=answer.brief,
         papers=[
@@ -203,6 +209,9 @@ def _answer(
                 score=s.score,
             )
             for s in answer.papers
+        ],
+        links=[
+            GraphLink.model_validate(e, from_attributes=True) for e in inner_links(store, cited_ids)
         ],
         trace=[TraceStep.model_validate(r, from_attributes=True) for r in answer.trace],
         cost_usd=answer.cost_usd,

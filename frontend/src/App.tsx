@@ -13,6 +13,7 @@ import {
   type ProgressStep,
   type QueryResult,
 } from "./api";
+import CitationGraph from "./CitationGraph";
 import GraphExplorer from "./GraphExplorer";
 import LandscapeView from "./LandscapeView";
 import ResearchMap, { Timeline } from "./ResearchMap";
@@ -396,8 +397,11 @@ function Workspace({
   const queryResult = phase.kind === "done" || phase.kind === "demo" ? phase.result : null;
   const landscape = phase.kind === "mapped" ? phase.result : null;
   if (!queryResult && !landscape) return null;
+  // Ask mode earns the side column once there is a citation graph to show beside the answer (two
+  // or more cited papers), or when a paper's neighborhood explorer is open.
   const split =
-    (landscape !== null && !landscape.declined) || (queryResult !== null && exploreId !== null);
+    (landscape !== null && !landscape.declined) ||
+    (queryResult !== null && (queryResult.papers.length > 1 || exploreId !== null));
   const exploreTitle =
     exploreId === null
       ? undefined
@@ -453,8 +457,13 @@ function Workspace({
               )}
             </>
           )}
-          {queryResult && exploreId && (
-            <GraphExplorer rootId={exploreId} rootTitle={exploreTitle} />
+          {queryResult && (
+            <>
+              {queryResult.papers.length > 1 && (
+                <CitationGraph papers={queryResult.papers} links={queryResult.links ?? []} />
+              )}
+              {exploreId && <GraphExplorer rootId={exploreId} rootTitle={exploreTitle} />}
+            </>
           )}
         </aside>
       )}

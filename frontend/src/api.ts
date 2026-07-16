@@ -21,6 +21,9 @@ export interface TraceStep {
 export interface QueryResult {
   brief: string;
   papers: PaperOut[];
+  // Semantic-similarity edges among the cited papers only, for the citation graph. Optional so
+  // older cached results and the saved demo runs (which predate the field) still type-check.
+  links?: GraphLinkOut[];
   trace: TraceStep[];
   cost_usd: number;
   cached: boolean;
