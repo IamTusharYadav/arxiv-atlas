@@ -24,6 +24,13 @@ Parameters:
     Type: Number
     Default: 40
     Description: Monthly AWS spend cap; email alerts fire at $10, $25, and this amount.
+  AllowedOrigin:
+    Type: String
+    Default: https://atlas.tusharyadav.dev
+    Description: >
+      Origin allowed to call the API from a browser. Not a security boundary on its own (CORS
+      binds browsers, not scripts), but it stops a copy of the page on someone else's domain
+      from spending this budget. Use "*" only for local frontend work against the live API.
 
 Globals:
   Function:
@@ -104,10 +111,11 @@ Resources:
   Api:
     Type: AWS::Serverless::HttpApi
     Properties:
-      # Anonymous browser client on Vercel; no cookies, so a wildcard read origin is fine.
+      # Anonymous browser client on the static host; no cookies, so no credentials to leak.
+      # The origin is pinned anyway so a copy of the page elsewhere cannot spend this budget.
       CorsConfiguration:
         AllowOrigins:
-          - "*"
+          - !Ref AllowedOrigin
         AllowMethods:
           - GET
           - POST

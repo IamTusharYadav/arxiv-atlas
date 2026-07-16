@@ -1,0 +1,29 @@
+# Static host for the ArXiv Atlas frontend. Import this from the main Caddyfile:
+#
+#   import /etc/caddy/sites/atlas.caddyfile
+#
+# It serves the built assets only. The browser calls the query API directly at its API Gateway
+# URL (baked into the bundle at build time by scripts/deploy_frontend.sh), so there is no proxy
+# here: routing /api through this box would send every request Germany -> us-east-1 -> Germany.
+
+atlas.tusharyadav.dev {
+	root * /var/www/atlas
+	encode zstd gzip
+
+	# Single page app: unknown paths are routes, not files. Real missing assets still 404
+	# because file_server runs after this rewrite only for paths with no match on disk.
+	try_files {path} /index.html
+	file_server
+
+	# Vite fingerprints asset filenames, so they can never go stale and are cached for a year.
+	# index.html carries the pointers to them, so it must always be revalidated.
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	header /index.html Cache-Control "no-cache"
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}

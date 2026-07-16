@@ -9,7 +9,9 @@ import {
   type QueryResult,
 } from "./api";
 import GraphExplorer from "./GraphExplorer";
+import StatusPage from "./StatusPage";
 import TracePanel from "./TracePanel";
+import { closestDemo } from "./demo";
 
 const POLL_MS = 2500;
 // A few network blips are survivable; a run of them means the API is gone, so stop burning
@@ -20,13 +22,29 @@ type Phase =
   | { kind: "idle" }
   | { kind: "working"; progress: ProgressStep[] }
   | { kind: "done"; result: QueryResult }
+  // A saved run, shown when the live agent cannot answer. `asked` is what the visitor typed,
+  // which is not what the saved run answered; the banner says so.
+  | { kind: "demo"; result: QueryResult; answered: string; asked: string }
   | { kind: "failed"; message: string; progress: ProgressStep[] };
+
+// The URL hash is the whole router: one extra view, deep-linkable, browser back works, and no
+// router dependency for it.
+function useHashView(): string {
+  const [hash, setHash] = useState(() => window.location.hash);
+  useEffect(() => {
+    const onHash = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  return hash;
+}
 
 export default function App() {
   const [question, setQuestion] = useState("");
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [corpusSize, setCorpusSize] = useState<number | null>(null);
   const [exploreId, setExploreId] = useState<string | null>(null);
+  const view = useHashView();
   // Bumped on every submit so a stale poll loop from an abandoned run stops writing state.
   const runId = useRef(0);
 
@@ -52,6 +70,14 @@ export default function App() {
       await poll(outcome.jobId, run);
     } catch (err) {
       if (run !== runId.current) return;
+      // 503 is the agent declining to answer: the daily budget cap (the drain backstop), an
+      // exhausted loop, or a worker that could not start. Rather than a dead page, fall back to
+      // a saved run, clearly labelled. Any other error is reported as itself.
+      if (err instanceof ApiError && err.status === 503) {
+        const demo = closestDemo(q);
+        setPhase({ kind: "demo", result: demo.result, answered: demo.question, asked: q });
+        return;
+      }
       setPhase({ kind: "failed", message: friendly(err), progress: [] });
     }
   }
@@ -86,6 +112,20 @@ export default function App() {
     }
   }
 
+  if (view === "#status") {
+    return (
+      <main>
+        <header>
+          <h1>ArXiv Atlas</h1>
+          <p className="tagline">
+            <a href="#">Back to search</a>
+          </p>
+        </header>
+        <StatusPage />
+      </main>
+    );
+  }
+
   return (
     <main>
       <header>
@@ -93,6 +133,8 @@ export default function App() {
         <p className="tagline">
           A semantic research graph over cs.AI / cs.LG / cs.CL abstracts
           {corpusSize !== null && <> &middot; {corpusSize.toLocaleString()} papers indexed</>}
+          {" "}
+          &middot; <a href="#status">status</a>
         </p>
       </header>
 
@@ -124,9 +166,28 @@ export default function App() {
         </section>
       )}
 
-      {phase.kind === "done" && <Result result={phase.result} onExplore={setExploreId} />}
+      {phase.kind === "demo" && (
+        <section className="card demo-banner">
+          <p>
+            <strong>Live queries are paused right now, so this is a saved example run.</strong>{" "}
+            It answers a different question than the one you asked, and it is a real recorded
+            answer over the same corpus, not a live one.
+          </p>
+          <p className="asked">
+            You asked: <em>{phase.asked}</em>
+            <br />
+            Showing: <em>{phase.answered}</em>
+          </p>
+        </section>
+      )}
 
-      {phase.kind === "done" && exploreId && <GraphExplorer rootId={exploreId} />}
+      {(phase.kind === "done" || phase.kind === "demo") && (
+        <Result result={phase.result} onExplore={setExploreId} />
+      )}
+
+      {(phase.kind === "done" || phase.kind === "demo") && exploreId && (
+        <GraphExplorer rootId={exploreId} />
+      )}
     </main>
   );
 }
