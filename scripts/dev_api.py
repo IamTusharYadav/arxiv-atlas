@@ -26,9 +26,7 @@ def main() -> None:
     setup_logging(settings.log_level)
     models = Path(__file__).resolve().parent.parent / "models"
     app = create_app(
-        store=QdrantStore(
-            QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
-        ),
+        store=QdrantStore(QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)),
         embedder=OnnxEmbedder(models / "model_quantized.onnx", models / "tokenizer.json"),
         client=BedrockClient(),
     )

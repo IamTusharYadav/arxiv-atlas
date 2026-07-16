@@ -83,9 +83,7 @@ def test_map_topic_builds_grounded_landscape(
         ]
     )
 
-    landscape = map_topic(
-        "kv cache", client=client, store=memory_store, embedder=fake_embedder
-    )
+    landscape = map_topic("kv cache", client=client, store=memory_store, embedder=fake_embedder)
 
     assert not landscape.declined
     assert f"[{first}]" in landscape.overview
@@ -126,9 +124,7 @@ def test_map_topic_out_of_scope_declines(
     )
     client, fake = make_bedrock_client([make_message(plan)])
 
-    landscape = map_topic(
-        "dark matter", client=client, store=memory_store, embedder=fake_embedder
-    )
+    landscape = map_topic("dark matter", client=client, store=memory_store, embedder=fake_embedder)
 
     assert landscape.declined
     assert "Astrophysics" in landscape.overview
