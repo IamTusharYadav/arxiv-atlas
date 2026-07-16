@@ -15,14 +15,27 @@ const idFromUrl = (url: string): string | null => {
   return m ? m[1] : null;
 };
 
-// Scroll a paper's on-page entry into view and flash it. Callers resolve the element within
-// their own subtree: both tab workspaces stay mounted, so a document-wide lookup could land on
-// the hidden one.
+// The end-of-animation cleanup, as a stable reference so a prior one can be removed before the
+// next flash restarts it. Pulling the class after the fade keeps the card's normal styling.
+function clearFlash(e: Event): void {
+  (e.currentTarget as HTMLElement).classList.remove("cite-flash");
+}
+
+// Scroll a paper's on-page entry fully into view and highlight it so it is obvious which one was
+// selected. The highlight fades itself out (CSS) and is torn down when the animation ends.
+// Callers resolve the element within their own subtree: both tab workspaces stay mounted, so a
+// document-wide lookup could land on the hidden one.
 export function flashPaper(el: Element | null | undefined): void {
-  if (!el) return;
-  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (!(el instanceof HTMLElement)) return;
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+  // Restart cleanly even if a prior flash is still running: drop the class, detach its pending
+  // end-listener, force a reflow so the browser sees a fresh start, then re-apply.
+  el.classList.remove("cite-flash");
+  el.removeEventListener("animationend", clearFlash);
+  void el.offsetWidth;
   el.classList.add("cite-flash");
-  setTimeout(() => el.classList.remove("cite-flash"), 1200);
+  el.addEventListener("animationend", clearFlash, { once: true });
 }
 
 function CiteLink({

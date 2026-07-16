@@ -696,18 +696,20 @@ footer {
   color: var(--accent);
 }
 
-/* Brief flash on the paper a citation just scrolled to, so the eye lands on the right row. */
+/* Highlight the paper a citation just scrolled to, so the eye lands on the right row. It holds
+   an accent tint briefly, then fades out over a few seconds (one gentle fade, never a flash). */
 @keyframes cite-flash {
-  from {
-    background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  0%,
+  35% {
+    background-color: color-mix(in srgb, var(--accent) 20%, transparent);
   }
-  to {
+  100% {
     background-color: transparent;
   }
 }
 
 .cite-flash {
-  animation: cite-flash 1.2s ease-out;
+  animation: cite-flash 3.5s ease-out;
   border-radius: 6px;
 }
 
