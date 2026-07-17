@@ -1,6 +1,6 @@
 [project]
 name = "arxiv-atlas"
-version = "0.2.0"
+version = "1.0.0"
 description = "Autonomous multi-agent system that maps new AI research from arXiv into a live semantic graph."
 readme = "README.md"
 license = { file = "LICENSE" }

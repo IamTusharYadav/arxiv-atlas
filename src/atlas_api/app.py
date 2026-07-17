@@ -351,7 +351,7 @@ def create_app(
     jobs: JobStore | None = None,
     dispatch: Callable[[str], None] | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="ArXiv Atlas API", version="0.2.0")
+    app = FastAPI(title="ArXiv Atlas API", version="1.0.0")
 
     if limiter is not None:
         rl = limiter  # bound non-optional so the closure below type-checks
