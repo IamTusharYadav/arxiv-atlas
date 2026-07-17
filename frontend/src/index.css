@@ -103,7 +103,7 @@ main {
 /* Reading-width sections (landing content, progress, single-column results) stay centered;
    the results workspace uses the full container. */
 .narrow {
-  max-width: 760px;
+  max-width: 860px;
   margin-inline: auto;
 }
 
@@ -215,22 +215,65 @@ main {
 
 /* Landing */
 
+/* Two columns on wide screens so the hero uses the horizontal space: the pitch on the left,
+   the concrete value points on the right. Collapses to one column when it gets tight. */
 .hero {
-  margin: 2.25rem 0 1.75rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 1.5rem 3rem;
+  align-items: start;
+  max-width: 860px;
+  margin: 2.5rem auto 2rem;
 }
 
 .hero h2 {
-  margin: 0 0 0.6rem;
-  font-size: 1.75rem;
-  line-height: 1.25;
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.18;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
-.hero p {
-  margin: 0;
+.hero-sub {
+  margin: 0.7rem 0 0;
   color: var(--muted);
-  max-width: 58ch;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.hero-points {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.hero-points li {
+  position: relative;
+  padding-left: 1.4rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.hero-points li::before {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  top: 0.58em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+@media (max-width: 720px) {
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 1.1rem;
+    margin-top: 2rem;
+  }
 }
 
 .section-label {
@@ -352,9 +395,10 @@ footer {
 /* Mode toggle */
 
 .mode {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
+  margin: 0 auto 0.9rem;
   gap: 0.25rem;
-  margin-bottom: 0.75rem;
   padding: 0.2rem;
   background: var(--panel);
   border: 1px solid var(--border);

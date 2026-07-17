@@ -37,6 +37,62 @@ const MAP_EXAMPLES = [
 
 type Mode = "map" | "ask";
 
+// The two modes solve different problems, so the landing speaks to each one instead of sharing a
+// single generic pitch: its own headline, description, value points, and how-it-works steps.
+const HERO: Record<Mode, { headline: string; sub: string; points: string[] }> = {
+  map: {
+    headline: "Understand an unfamiliar research field.",
+    sub: "Name a topic and Atlas maps the current landscape from the last year of arXiv abstracts, so you can see how the field is organized before you start reading.",
+    points: [
+      "The major research directions, grouped and named",
+      "The papers worth reading first",
+      "Trends, relationships, and the open problems",
+      "A structured reading roadmap",
+    ],
+  },
+  ask: {
+    headline: "Get a cited answer to a research question.",
+    sub: "Ask a pointed question and Atlas writes a brief from the literature in which every claim links to the paper it came from.",
+    points: [
+      "A synthesized answer grounded in real papers",
+      "The evidence behind every claim",
+      "One click from any citation to its paper",
+      "Fast to verify and explore further",
+    ],
+  },
+};
+
+const WORKFLOW: Record<Mode, { title: string; body: string }[]> = {
+  map: [
+    {
+      title: "Search the corpus",
+      body: "Your topic is split into focused subqueries and matched against the corpus.",
+    },
+    {
+      title: "Cluster into directions",
+      body: "Matching papers are grouped into research directions, and an agent reads and names each one.",
+    },
+    {
+      title: "Build the map",
+      body: "You get the landscape: a research map, key ideas, activity over time, a reading order, and the open problems, all cited.",
+    },
+  ],
+  ask: [
+    {
+      title: "Retrieve evidence",
+      body: "Your question is expanded into subqueries and the most relevant papers are pulled from the corpus.",
+    },
+    {
+      title: "Analyze the literature",
+      body: "The agent reads the candidates, extracts the claims that bear on your question, and checks coverage.",
+    },
+    {
+      title: "Write a cited answer",
+      body: "You get a synthesized brief in which every claim cites the paper it came from, ready to verify.",
+    },
+  ],
+};
+
 type Phase =
   | { kind: "idle" }
   | { kind: "working"; progress: ProgressStep[]; mode: Mode }
@@ -227,15 +283,16 @@ export default function App() {
       {topbar}
 
       {phase.kind === "idle" && (
-        <section className="hero narrow">
-          <h2>Understand a research area in minutes.</h2>
-          <p>
-            Name a topic and Atlas maps the current landscape from{" "}
-            {corpusSize !== null ? corpusSize.toLocaleString() : "almost 100,000"} recent arXiv
-            abstracts: the major directions, where activity is flowing, which papers to read
-            first, and what remains open. Or ask a pointed question and get a brief in which
-            every claim cites its paper.
-          </p>
+        <section className="hero">
+          <div className="hero-lead">
+            <h2>{HERO[mode].headline}</h2>
+            <p className="hero-sub">{HERO[mode].sub}</p>
+          </div>
+          <ul className="hero-points" aria-label="What you get">
+            {HERO[mode].points.map((point) => (
+              <li key={point}>{point}</li>
+            ))}
+          </ul>
         </section>
       )}
 
@@ -314,24 +371,12 @@ export default function App() {
           </section>
 
           <section className="how" aria-label="How it works">
-            <div>
-              <h3>Search</h3>
-              <p>Your topic is split into focused subqueries and matched against the corpus.</p>
-            </div>
-            <div>
-              <h3>Group and read</h3>
-              <p>
-                Matching papers are clustered into research directions, and an agent reads and
-                names each one.
-              </p>
-            </div>
-            <div>
-              <h3>Map</h3>
-              <p>
-                You get the landscape: a research map, key ideas, activity over time, a reading
-                order, and the open problems, all cited.
-              </p>
-            </div>
+            {WORKFLOW[mode].map((step) => (
+              <div key={step.title}>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </div>
+            ))}
           </section>
 
           <footer>
