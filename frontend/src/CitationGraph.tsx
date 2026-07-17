@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import ForceGraph2D, { type ForceGraphMethods } from "react-force-graph-2d";
+import ForceGraph2D from "react-force-graph-2d";
 import type { GraphLinkOut, PaperOut } from "./api";
 import { useDarkMode } from "./useDarkMode";
 
@@ -41,7 +41,6 @@ export default function CitationGraph({
   const dark = useDarkMode();
   const mode = dark ? "dark" : "light";
   const colors = SERIES[mode];
-  const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -106,7 +105,6 @@ export default function CitationGraph({
       <div className="graph-well" ref={wrapRef}>
         {width > 0 && (
           <ForceGraph2D
-            ref={fgRef}
             width={width}
             height={360}
             graphData={data}
