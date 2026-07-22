@@ -5,9 +5,7 @@ Status: accepted
 
 ## Context
 
-The project must ship a working, publicly demoable system within roughly 8 weeks of part-time
-work and then run unattended for 4+ months on about $130 of AWS credits. Every adjacent feature
-(PDF parsing, citation graphs, more arXiv categories, user accounts) has a plausible argument
+Every adjacent feature (PDF parsing, citation graphs, more arXiv categories, user accounts) has a plausible argument
 for inclusion and a track record of killing similar projects through scope creep.
 
 ## Decision

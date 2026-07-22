@@ -30,73 +30,62 @@ page reports corpus size and live health.
 
 ## Table of contents
 
-- [Features](#features)
 - [Demo](#demo)
+- [Results](#results)
+- [Why it is built this way](#why-it-is-built-this-way)
 - [Architecture](#architecture)
 - [Tech stack](#tech-stack)
+- [Features](#features)
 - [Repository structure](#repository-structure)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Environment variables](#environment-variables)
-- [Running the application](#running-the-application)
-- [Testing](#testing)
-- [API overview](#api-overview)
-- [Ingestion pipeline](#ingestion-pipeline)
-- [Evaluations](#evaluations)
-- [AWS setup and deployment](#aws-setup-and-deployment)
-- [Configuration](#configuration)
-- [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
 
+Setup, API, deployment, and troubleshooting reference are collapsed in the sections below.
+
 ---
-
-## Features
-
-- **Topic landscapes.** Name a research area and get a clustered map of its directions, a reading
-  order, an activity-over-time chart, and a list of open problems, all cited.
-- **Cited question answering.** Ask a pointed question and get a brief where every claim links to
-  the paper it came from, plus a citation graph of how the cited papers relate.
-- **Semantic graph, not citation graph.** Papers are linked by embedding similarity, so brand-new
-  work is connected from day one instead of waiting for citations to accrue (see
-  [ADR 0001](docs/adr/0001-scope.md)).
-- **Framework-free agent harness.** A hand-built plan/retrieve/rerank/read/verify/synthesize loop
-  on AWS Bedrock, with no LangChain or LlamaIndex in the core path
-  ([ADR 0002](docs/adr/0002-framework-free-harness.md)).
-- **Interactive graph UI.** Force-directed research maps, a per-paper neighborhood explorer, and
-  clickable in-page citations.
-- **Cost and reliability guards.** Per-IP rate limiting, a semantic response cache, a fail-closed
-  daily budget guard, and an AWS monthly budget with email alerts, all fronting the model calls.
-- **Async job model.** Long agent runs return a job id immediately and are polled, surfacing live
-  per-step progress instead of a blank spinner.
-- **Golden-set evaluations.** A YAML golden set scored by an LLM judge, gating on relevance,
-  faithfulness, and citation correctness.
-- **Nightly ingestion.** A scheduled GitHub Actions workflow keeps the corpus current and resumes
-  from the corpus itself, so there is no separate checkpoint to drift.
 
 ## Demo
 
 The live application is at <https://atlas.tusharyadav.dev>.
 
-### Map a topic
-
-Name a research area and get a clustered landscape: the research directions, a reading order, the
-open problems, and an interactive research map.
-
-https://github.com/user-attachments/assets/2bd0a189-4fed-499e-b405-a784b957807b
-
-### Ask a question
-
-Type a research question and watch the pipeline work through it, then get a cited brief whose
-citations scroll to the referenced paper and a graph of how the cited papers relate.
-
-https://github.com/user-attachments/assets/27569cf6-0a62-44c1-a040-b735ddc9d5f1
-
-### Screenshots
-
 | Landing | Topic landscape | Cited answer |
 | --- | --- | --- |
 | ![Landing page with the Map a topic and Ask a question tabs](docs/assets/landing.png) | ![Topic landscape: where to start, open problems, and the research map](docs/assets/landscape.png) | ![Ask a question: a cited answer with its citation graph](docs/assets/answer.png) |
+
+**Map a topic** into a clustered landscape: the research directions, a reading order, the open
+problems, and an interactive research map. **Ask a question** and watch the pipeline work through
+it, then get a cited brief whose citations scroll to the referenced paper, with a graph of how the
+cited papers relate.
+
+## Results
+
+| Metric               | Baseline | Current | Gate |
+|----------------------|---------:|--------:|-----:|
+| Relevance            |          |         | ≥    |
+| Faithfulness         |          |         | ≥    |
+| Citation correctness |          |         | ≥    |
+
+Corpus: ~100k papers · Median query cost $0.0X · p95 latency Xs · Monthly run cost $XX
+
+## Why it is built this way
+
+Three decisions shape the system, each recorded as an ADR:
+
+- **Scope fence ([ADR 0001](docs/adr/0001-scope.md)).** v1 is `cs.AI`/`cs.LG`/`cs.CL` abstracts
+  only, no accounts, and semantic edges rather than citation edges. Linking papers by embedding
+  similarity connects brand-new work from day one instead of waiting for citations to accrue; the
+  tradeoff, that semantic neighbors are not intellectual lineage, is stated rather than hidden.
+- **Framework-free agent harness ([ADR 0002](docs/adr/0002-framework-free-harness.md)).** The
+  plan/retrieve/rerank/read/verify/synthesize loop is hand-written, with no LangChain or LlamaIndex
+  in the core path, for control over token cost, deterministic tests against recorded fixtures, and
+  a loop that can actually be stepped through.
+- **Research-copilot pivot ([ADR 0003](docs/adr/0003-research-copilot-pivot.md)).** The product
+  leads with mapping a topic into a landscape, not only answering one question, because getting
+  oriented in an unfamiliar area is the harder need.
+
+Operating the system is treated as a first-class concern: a golden-set evaluation gate, a
+fail-closed daily budget guard, a semantic response cache, model tiering (Haiku for the mechanical
+steps, Sonnet only for synthesis), and the per-query cost returned in every response.
 
 ## Architecture
 
@@ -163,6 +152,29 @@ High-level flow:
 | Python tooling | `uv`, Ruff (lint + format), mypy (strict), pytest, pytest-cov, pre-commit, hatchling |
 | Frontend tooling | npm, Vitest, ESLint, `tsc` |
 
+## Features
+
+- **Topic landscapes.** Name a research area and get a clustered map of its directions, a reading
+  order, an activity-over-time chart, and a list of open problems, all cited.
+- **Cited question answering.** Ask a pointed question and get a brief where every claim links to
+  the paper it came from, plus a citation graph of how the cited papers relate.
+- **Semantic graph, not citation graph.** Papers are linked by embedding similarity, so brand-new
+  work is connected from day one instead of waiting for citations to accrue (see
+  [ADR 0001](docs/adr/0001-scope.md)).
+- **Framework-free agent harness.** A hand-built plan/retrieve/rerank/read/verify/synthesize loop
+  on AWS Bedrock, with no LangChain or LlamaIndex in the core path
+  ([ADR 0002](docs/adr/0002-framework-free-harness.md)).
+- **Interactive graph UI.** Force-directed research maps, a per-paper neighborhood explorer, and
+  clickable in-page citations.
+- **Cost and reliability guards.** Per-IP rate limiting, a semantic response cache, a fail-closed
+  daily budget guard, and an AWS monthly budget with email alerts, all fronting the model calls.
+- **Async job model.** Long agent runs return a job id immediately and are polled, surfacing live
+  per-step progress instead of a blank spinner.
+- **Golden-set evaluations.** A YAML golden set scored by an LLM judge, gating on relevance,
+  faithfulness, and citation correctness.
+- **Nightly ingestion.** A scheduled GitHub Actions workflow keeps the corpus current and resumes
+  from the corpus itself, so there is no separate checkpoint to drift.
+
 ## Repository structure
 
 ```text
@@ -196,6 +208,9 @@ Notes:
   Dockerfile builds it during the image build.
 - `frontend/README.md` is the default Vite template and is not project documentation; this file is
   the authoritative README.
+
+<details>
+<summary><strong>Setup and local development</strong> (prerequisites, installation, environment variables, running, testing)</summary>
 
 ## Prerequisites
 
@@ -394,6 +409,11 @@ npm --prefix frontend run build     # includes tsc type checking
 CI (`.github/workflows/ci.yml`) runs the Python format check, lint, mypy, and pytest with coverage
 on every push and pull request.
 
+</details>
+
+<details>
+<summary><strong>API, ingestion, and evaluations</strong> (endpoints, the ingestion CLI, the eval runner)</summary>
+
 ## API overview
 
 Base URL is the API Gateway endpoint printed as the stack's `ApiUrl` output, of the form
@@ -490,6 +510,11 @@ uv run python -m evals.run_evals --full --update-baseline   # save this run as t
 
 Evals need `QDRANT_URL` / `QDRANT_API_KEY` and AWS credentials for Bedrock. On a pull request,
 adding the `run-evals` label triggers `.github/workflows/evals.yml` to score the first 15 queries.
+
+</details>
+
+<details>
+<summary><strong>Deployment and operations</strong> (AWS setup, configuration, troubleshooting)</summary>
 
 ## AWS setup and deployment
 
@@ -629,6 +654,8 @@ Architecture decisions are recorded in [`docs/adr/`](docs/adr/): scope
 - **CORS errors during local frontend work against the live API** - deploy with `AllowedOrigin="*"`
   for development, or use the Vite dev proxy (Option A), which calls the API server-side.
 
+</details>
+
 ## Contributing
 
 Contributions are welcome.
@@ -637,7 +664,7 @@ Contributions are welcome.
 2. Install the toolchain: `uv sync --extra api`, `uv run pre-commit install`, and
    `npm --prefix frontend install`.
 3. Make your change with tests. Keep mypy green and follow the existing style (Ruff formats;
-   comments explain why, not what; no em dash characters anywhere, per `CLAUDE.md`).
+   comments explain why, not what).
 4. Run the full local gate before pushing:
 
    ```sh
