@@ -10,8 +10,20 @@ Parameters:
     Type: String
     NoEcho: true
     Description: >
-      Qdrant Cloud API key. Passed as a NoEcho parameter for a simple first deploy; move it to an
-      SSM SecureString dynamic reference to keep it out of the function config.
+      Qdrant Cloud API key. Passed as a NoEcho parameter for a simple first deploy
+  LangfusePublicKey:
+    Type: String
+    Default: ""
+    Description: Langfuse public key (pk-lf-...). Empty leaves tracing off (fail-open no-op sink).
+  LangfuseSecretKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Langfuse secret key (sk-lf-...). NoEcho like the Qdrant key; empty disables tracing.
+  LangfuseHost:
+    Type: String
+    Default: https://cloud.langfuse.com
+    Description: Langfuse Cloud region base URL (EU default; use https://us.cloud.langfuse.com for US).
   OnnxDir:
     Type: String
     Default: /var/task/models
@@ -27,21 +39,14 @@ Parameters:
   AllowedOrigin:
     Type: String
     Default: https://atlas.tusharyadav.dev
-    Description: >
-      Origin allowed to call the API from a browser. Not a security boundary on its own (CORS
-      binds browsers, not scripts), but it stops a copy of the page on someone else's domain
-      from spending this budget. Use "*" only for local frontend work against the live API.
+    Description: Origin allowed to call the API from a browser.
 
 Globals:
   Function:
-    # 900s for the async worker's multi-round loop. The request path returns in <1s (API Gateway
-    # caps it at 30s regardless), so this long ceiling only ever applies to the background worker.
-    # ponytail: shared function; split into a short-timeout API fn + a long worker fn if a hung
-    # request billing toward 900s ever matters.
+    # 900s for the async worker's multi-round loop.
     Timeout: 900
-    # ~1.7 vCPU: 1024 MB starved the cold-start init (onnx load) past Lambda's 10s init cap.
     MemorySize: 3008
-    # avx512_vnni quantization (scripts/export_onnx.py) targets x86; keep them in step.
+    # avx512_vnni quantization (scripts/export_onnx.py) targets x86.
     Architectures:
       - x86_64
 
@@ -50,7 +55,7 @@ Conditions:
 
 Resources:
   # One table per request-path guard; all keyed on `pk`, all reaped by DynamoDB TTL on
-  # `expires_at`. On-demand billing so idle cost is zero.
+  # `expires_at`.
   BucketTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -112,7 +117,6 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       # Anonymous browser client on the static host; no cookies, so no credentials to leak.
-      # The origin is pinned anyway so a copy of the page elsewhere cannot spend this budget.
       CorsConfiguration:
         AllowOrigins:
           - !Ref AllowedOrigin
@@ -150,6 +154,10 @@ Resources:
           ATLAS_JOBS_TABLE: !Ref JobsTable
           # Read by _dispatch to self-invoke the alias rather than $LATEST.
           ATLAS_LAMBDA_ALIAS: live
+          # Langfuse SDK reads these directly; an empty public key leaves the tracer a no-op.
+          LANGFUSE_PUBLIC_KEY: !Ref LangfusePublicKey
+          LANGFUSE_SECRET_KEY: !Ref LangfuseSecretKey
+          LANGFUSE_HOST: !Ref LangfuseHost
           LOG_LEVEL: INFO
       # run_job catches its own business errors, so this only retries a hard worker crash/timeout.
       EventInvokeConfig:

@@ -84,26 +84,22 @@ jobs:
               QdrantUrl="${{ secrets.QDRANT_URL }}" \
               QdrantApiKey="${{ secrets.QDRANT_API_KEY }}" \
               AlertEmail="${{ secrets.ALERT_EMAIL }}" \
+              LangfusePublicKey="${{ secrets.LANGFUSE_PUBLIC_KEY }}" \
+              LangfuseSecretKey="${{ secrets.LANGFUSE_SECRET_KEY }}" \
+              LangfuseHost="${{ secrets.LANGFUSE_HOST }}" \
               MonthlyBudgetUsd=40
 
-      # Proves the shifted alias actually serves: /api/status reaches Qdrant and returns the live
-      # corpus size. The full canned-query smoke is commit 42.
-      # The retries absorb the documented cold-pull 503 on the first request against a fresh image
-      # (curl retries 5xx under -f), without masking a real failure: a broken build 503s past every
-      # retry, and a 4xx fails immediately.
+      # Deterministic free gate (/api/status + /api/graph) that decides the alias rollback below,
+      # then a canned live query as alert-only. The curl retries inside the script absorb the
+      # documented cold-pull 503 on the first request against a fresh image without masking a real
+      # failure: a broken build 503s past every retry, a 4xx fails immediately. SMOKE_PAPER_ID is a
+      # repo variable holding a stable in-corpus arXiv id; unset skips the graph half of the gate.
       - name: Smoke
         id: smoke
         run: |
           url=$(aws cloudformation describe-stacks --stack-name "$STACK" \
             --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
-          echo "smoking $url/api/status"
-          body=$(curl -fsS --max-time 30 --retry 5 --retry-connrefused --retry-delay 10 \
-            "$url/api/status")
-          echo "$body"
-          echo "$body" | grep -q '"corpus_size"' || {
-            echo "::error::status response has no corpus_size"
-            exit 1
-          }
+          bash scripts/smoke_live.sh "$url" "${{ vars.SMOKE_PAPER_ID }}"
 
       # Only when the deploy landed but the smoke rejected it. A failed `sam deploy` is already
       # rolled back by CloudFormation, and a failed build never shifted the alias.
