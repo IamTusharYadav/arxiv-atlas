@@ -559,33 +559,3 @@ def test_v1_clusters_groups_every_matched_paper(
     grouped = [p["arxiv_id"] for c in body["clusters"] for p in c["papers"]]
     assert set(grouped) == set(IDS)  # every retrieved paper lands in exactly one cluster
     assert len(grouped) == len(set(grouped))
-
-
-def test_v1_bridge_flags_near_identical_topics(
-    memory_store: QdrantStore, fake_embedder: FakeEmbedder
-) -> None:
-    seed(memory_store, fake_embedder)
-    # same text embeds to the same vector, so the overlap gate fires before any search
-    body = (
-        client_for(memory_store, [])
-        .get("/api/v1/bridge", params={"a": "kv cache", "b": "kv cache"})
-        .json()
-    )
-    assert body["bridges"] == []
-    assert "overlap" in body["note"].lower()
-
-
-def test_v1_bridge_returns_a_note_when_nothing_bridges(
-    memory_store: QdrantStore, fake_embedder: FakeEmbedder
-) -> None:
-    seed(memory_store, fake_embedder)
-    # distinct topics: the fake embedder makes them orthogonal to the seeded papers, so nothing
-    # clears the both-sides floor. A 200 with an empty list and a note, never an error.
-    body = (
-        client_for(memory_store, [])
-        .get("/api/v1/bridge", params={"a": "quantization", "b": "machine translation"})
-        .json()
-    )
-    assert body["topic_a"] == "quantization"
-    assert body["bridges"] == []
-    assert body["note"]

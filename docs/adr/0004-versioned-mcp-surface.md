@@ -85,3 +85,6 @@ and full-text anything (abstracts only). The 2507 orphan cohort is left as-is; t
 notes low connectivity rather than a re-link running. If the MCP `find_bridge_papers` tool does
 not convince on hand-validation, it ships as four tools and the ADR-style honesty is that the
 scoring was not good enough, not that the surface failed.
+
+That validation ran on 2026-07-23 over 30 topic pairs and the tool was cut; see ADR 0005. The
+surface is the four routes listed above.

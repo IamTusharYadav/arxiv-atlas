@@ -7,7 +7,6 @@ import re
 from time import time
 
 import numpy as np
-import numpy.typing as npt
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
@@ -23,13 +22,6 @@ MAX_K = 25
 # array ops, not a corpus scan.
 CLUSTER_POOL = 100
 CORPUS_TTL_S = 300
-
-# Bridge search: pull a wide pool per topic, then keep only papers close to BOTH. The floor and
-# overlap thresholds are first guesses to tune against real pairs; ranking by the weaker of the two
-# similarities is what keeps out papers that only really belong to one side.
-BRIDGE_POOL = 300
-BRIDGE_FLOOR = 0.35
-BRIDGE_OVERLAP = 0.90
 
 CATEGORIES = ["cs.AI", "cs.LG", "cs.CL"]
 
@@ -56,26 +48,6 @@ def _month(paper: Paper) -> str:
 
 def _abs_url(arxiv_id: str) -> str:
     return f"https://arxiv.org/abs/{arxiv_id}"
-
-
-def bridge_scores(
-    vectors: dict[str, list[float]],
-    vec_a: npt.NDArray[np.float32],
-    vec_b: npt.NDArray[np.float32],
-    floor: float,
-) -> list[tuple[str, float, float]]:
-    """Papers close to both topics, best-bridge-first. Stored and query vectors are L2-normalized,
-    so a dot product is cosine similarity. A paper must clear the floor on both sides to count, and
-    ranking by the weaker side keeps out papers that only really belong to one topic."""
-    scored: list[tuple[str, float, float]] = []
-    for arxiv_id, vector in vectors.items():
-        v = np.asarray(vector, dtype=np.float32)
-        sim_a = float(v @ vec_a)
-        sim_b = float(v @ vec_b)
-        if sim_a >= floor and sim_b >= floor:
-            scored.append((arxiv_id, sim_a, sim_b))
-    scored.sort(key=lambda t: min(t[1], t[2]), reverse=True)
-    return scored
 
 
 class Corpus(BaseModel):
@@ -126,26 +98,6 @@ class Cluster(BaseModel):
 class ClustersResponse(BaseModel):
     corpus: Corpus
     clusters: list[Cluster]
-    note: str | None = None
-
-
-class BridgePaper(BaseModel):
-    arxiv_id: str
-    title: str
-    primary_category: str
-    published_month: str
-    # Both similarities, so the caller can judge how balanced the bridge is rather than trust the
-    # ranking blind. Untrusted third-party lead text, as everywhere else.
-    sim_a: float
-    sim_b: float
-    abstract_lead: str
-
-
-class BridgeResponse(BaseModel):
-    corpus: Corpus
-    topic_a: str
-    topic_b: str
-    bridges: list[BridgePaper]
     note: str | None = None
 
 
@@ -258,41 +210,6 @@ def register_v1(app: FastAPI, *, store: VectorStore, embedder: Embedder) -> None
                 Cluster(papers=[_result(papers[i], score[i]) for i in ordered]),
             )
         return ClustersResponse(corpus=corpus(), clusters=groups)
-
-    @app.get("/api/v1/bridge")
-    def bridge(
-        a: str = Query(min_length=1, max_length=500),
-        b: str = Query(min_length=1, max_length=500),
-        k: int = DEFAULT_K,
-    ) -> BridgeResponse:
-        vec_a, vec_b = embedder.embed([QUERY_PREFIX + a, QUERY_PREFIX + b])
-        if float(vec_a @ vec_b) >= BRIDGE_OVERLAP:
-            return BridgeResponse(
-                corpus=corpus(),
-                topic_a=a,
-                topic_b=b,
-                bridges=[],
-                note="These two topics overlap too much for a bridge between them to mean much.",
-            )
-        # Pull a wide pool per topic; a real bridge paper ranks well for both, so it lands in both.
-        hits = [*store.search(vec_a, limit=BRIDGE_POOL), *store.search(vec_b, limit=BRIDGE_POOL)]
-        papers = {h.paper.arxiv_id: h.paper for h in hits}
-        vectors = store.get_vectors(list(papers))
-        scored = bridge_scores(vectors, vec_a, vec_b, BRIDGE_FLOOR)[: _clamp_k(k)]
-        bridges = [
-            BridgePaper(
-                arxiv_id=papers[i].arxiv_id,
-                title=papers[i].title,
-                primary_category=papers[i].primary_category,
-                published_month=_month(papers[i]),
-                sim_a=round(sim_a, 4),
-                sim_b=round(sim_b, 4),
-                abstract_lead=_lead(papers[i].abstract),
-            )
-            for i, sim_a, sim_b in scored
-        ]
-        note = None if bridges else "No paper in the corpus sits close to both topics."
-        return BridgeResponse(corpus=corpus(), topic_a=a, topic_b=b, bridges=bridges, note=note)
 
     @app.get("/api/v1/graph/{arxiv_id:path}")
     def graph(arxiv_id: str) -> V1GraphResponse:

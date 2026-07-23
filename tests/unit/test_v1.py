@@ -1,7 +1,6 @@
-import numpy as np
 import pytest
 
-from atlas_api.v1 import _lead, bridge_scores, normalize_arxiv_id
+from atlas_api.v1 import _lead, normalize_arxiv_id
 
 
 @pytest.mark.parametrize(
@@ -39,23 +38,3 @@ def test_lead_truncates_and_marks_long_abstracts() -> None:
 
 def test_lead_leaves_short_abstracts_whole() -> None:
     assert _lead("short abstract") == "short abstract"
-
-
-def test_bridge_scores_ranks_by_the_weaker_side() -> None:
-    a = np.array([1, 0, 0], dtype=np.float32)  # sim_a reads a paper vector's first component
-    b = np.array([0, 1, 0], dtype=np.float32)  # sim_b reads its second
-    vectors = {
-        "both": [0.7, 0.7, 0.0],  # strong on both
-        "a_only": [0.95, 0.1, 0.0],  # strong on a, below floor on b
-        "weakish": [0.5, 0.45, 0.0],  # clears both, but by less
-    }
-    out = bridge_scores(vectors, a, b, floor=0.35)
-
-    assert [i for i, _, _ in out] == ["both", "weakish"]  # a_only filtered; ranked by weaker side
-    assert all(sim_a >= 0.35 and sim_b >= 0.35 for _, sim_a, sim_b in out)
-
-
-def test_bridge_scores_empty_when_nothing_clears_both() -> None:
-    a = np.array([1, 0], dtype=np.float32)
-    b = np.array([0, 1], dtype=np.float32)
-    assert bridge_scores({"x": [0.9, 0.1]}, a, b, floor=0.35) == []

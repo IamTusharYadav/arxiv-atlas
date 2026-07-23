@@ -56,18 +56,6 @@ def test_clusters_omits_k_when_zero(monkeypatch: pytest.MonkeyPatch) -> None:
     assert seen["k"] == "4"
 
 
-def test_bridge_passes_both_topics(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: dict[str, str] = {}
-
-    def handler(req: httpx.Request) -> httpx.Response:
-        seen.update(dict(req.url.params))
-        return httpx.Response(200, json={"bridges": [], "note": None})
-
-    _wire(monkeypatch, handler)
-    server.find_bridge_papers("reinforcement learning", "protein folding", k=5)
-    assert seen == {"a": "reinforcement learning", "b": "protein folding", "k": "5"}
-
-
 def test_explore_forwards_the_id(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, str] = {}
 
