@@ -61,18 +61,24 @@ cited papers relate.
 
 | Metric               | Baseline | Latest | Gate     |
 |----------------------|---------:|-------:|---------:|
-| Relevance            |     4.60 |   4.60 |   ≥ 4.30 |
-| Faithfulness         |     4.83 |   4.83 |   ≥ 4.53 |
-| Citation correctness |     4.87 |   4.87 | reported |
+| Relevance            |     4.83 |   4.83 |   ≥ 4.53 |
+| Faithfulness         |     4.93 |   4.93 |   ≥ 4.63 |
+| Citation correctness |     4.97 |   4.97 | reported |
 
 Thirty golden queries answered by the live agent and scored 1-5 by an LLM judge, 2026-07-23.
-Twenty-five scored 5/5/5. A merge is blocked when a gated dimension falls more than 0.3 below the
+Twenty-seven scored 5/5/5. A merge is blocked when a gated dimension falls more than 0.3 below the
 baseline, which is where the gate column comes from; citation correctness is recorded but does not
-gate. The set includes adversarial, ambiguous, and out-of-scope cases on purpose, and the two
-lowest scores are honesty probes rather than topic questions.
+gate. The set includes adversarial, ambiguous, and out-of-scope cases on purpose, so the lowest
+scores come from honesty probes rather than topic questions.
 
-Corpus: 100,549 papers · median query cost $0.033 (p95 $0.103, hard cap $0.12) · median agent loop
-30.5s (p95 82.2s) 
+The gate has already earned its keep. A probe asking which paper is most cited and what builds on
+it scored 1/1/1: the corpus holds abstracts and similarity links with no citation data, so the loop
+ran to its cap and returned a partial that read as invented lineage. The scope gate now rejects a
+question by the kind of data it needs, not only by subject, which moved that query to 4/5/5 and
+cut it from $0.0107 to $0.0013.
+
+Corpus: 100,549 papers · median query cost $0.033 (p95 $0.090, hard cap $0.12) · median agent loop
+31.0s (p95 75.0s)
 
 ## Why it is built this way
 
@@ -684,8 +690,7 @@ Contributions are welcome.
 
 5. Open a pull request. CI runs format, lint, type, and test checks; add the `run-evals` label to
    also score the golden subset. Do not commit generated artifacts (`models/`, build output).
-6. For decisions with long-term consequences, add an ADR under `docs/adr/`, and update
-   `docs/implementation-status.md` when a milestone lands.
+6. For decisions with long-term consequences, add an ADR under `docs/adr/`.
 
 Please respect the v1 scope fence ([ADR 0001](docs/adr/0001-scope.md)) and the framework-free core
 ([ADR 0002](docs/adr/0002-framework-free-harness.md)).
