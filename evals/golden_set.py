@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from itertools import zip_longest
 from pathlib import Path
 
 import yaml
@@ -33,3 +34,15 @@ def _parse(path: Path) -> GoldenQuery:
 
 def load_golden(directory: Path = GOLDEN_DIR) -> list[GoldenQuery]:
     return [_parse(p) for p in sorted(directory.glob("*.yaml"))]
+
+
+def subset(queries: list[GoldenQuery], n: int) -> list[GoldenQuery]:
+    """Round-robin across categories, because filename order is alphabetical: a plain prefix
+    would hand the nightly gate three adversarial cases and no technical survey at all."""
+    by_category: dict[str, list[GoldenQuery]] = {}
+    for query in queries:
+        by_category.setdefault(query.category, []).append(query)
+    interleaved = [
+        query for group in zip_longest(*by_category.values()) for query in group if query
+    ]
+    return interleaved[:n]

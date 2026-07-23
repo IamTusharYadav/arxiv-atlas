@@ -59,13 +59,20 @@ cited papers relate.
 
 ## Results
 
-| Metric               | Baseline | Current | Gate |
-|----------------------|---------:|--------:|-----:|
-| Relevance            |          |         | ≥    |
-| Faithfulness         |          |         | ≥    |
-| Citation correctness |          |         | ≥    |
+| Metric               | Baseline | Latest | Gate     |
+|----------------------|---------:|-------:|---------:|
+| Relevance            |     4.60 |   4.60 |   ≥ 4.30 |
+| Faithfulness         |     4.83 |   4.83 |   ≥ 4.53 |
+| Citation correctness |     4.87 |   4.87 | reported |
 
-Corpus: ~100k papers · Median query cost $0.0X · p95 latency Xs · Monthly run cost $XX
+Thirty golden queries answered by the live agent and scored 1-5 by an LLM judge, 2026-07-23.
+Twenty-five scored 5/5/5. A merge is blocked when a gated dimension falls more than 0.3 below the
+baseline, which is where the gate column comes from; citation correctness is recorded but does not
+gate. The set includes adversarial, ambiguous, and out-of-scope cases on purpose, and the two
+lowest scores are honesty probes rather than topic questions.
+
+Corpus: 100,549 papers · median query cost $0.033 (p95 $0.103, hard cap $0.12) · median agent loop
+30.5s (p95 82.2s) 
 
 ## Why it is built this way
 

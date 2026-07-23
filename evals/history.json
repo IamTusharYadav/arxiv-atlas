@@ -5,5 +5,12 @@
     "faithfulness": 5.0,
     "citation_correctness": 5.0,
     "n": 5
+  },
+  {
+    "timestamp": "2026-07-23T12:47:17.414487+00:00",
+    "relevance": 4.6,
+    "faithfulness": 4.833,
+    "citation_correctness": 4.867,
+    "n": 30
   }
 ]
