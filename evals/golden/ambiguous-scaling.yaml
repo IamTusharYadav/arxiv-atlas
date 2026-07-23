@@ -1,0 +1,15 @@
+id: ambiguous-scaling
+category: ambiguous
+question: How does scaling work?
+in_scope: true
+expected_topics:
+  - scaling laws
+  - model size
+  - data scaling
+  - compute
+rubric_notes: >
+  "Scaling" is underspecified: it could mean neural scaling laws, scaling training compute or
+  data, scaling inference/serving, or context-length scaling. A strong answer names the plausible
+  readings, commits to the most likely one (scaling laws for model/data/compute) with cited work,
+  and stays grounded rather than sprawling across every meaning. Penalize a vague essay that
+  engages none of the concrete research, and any citation not supported by a retrieved abstract.

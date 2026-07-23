@@ -1,0 +1,15 @@
+id: llm-agent-memory
+category: specific-topic
+question: What approaches exist for giving LLM agents long-term memory across sessions?
+in_scope: true
+expected_topics:
+  - agent memory
+  - retrieval
+  - memory consolidation
+  - episodic memory
+  - context management
+rubric_notes: >
+  A strong answer separates the mechanisms (external retrieval over stored history, summarization
+  and consolidation, structured or episodic memory stores, learned memory controllers) with a
+  cited paper each, and notes the recall-versus-staleness and cost tradeoffs. Penalize collapsing
+  the topic into "just use RAG" without engaging memory-specific work, and uncited claims.

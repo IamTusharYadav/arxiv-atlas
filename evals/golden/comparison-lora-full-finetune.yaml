@@ -1,0 +1,15 @@
+id: comparison-lora-full-finetune
+category: comparison
+question: When should I use LoRA-style parameter-efficient fine-tuning instead of full fine-tuning?
+in_scope: true
+expected_topics:
+  - lora
+  - parameter efficient fine tuning
+  - full fine tuning
+  - adapters
+  - catastrophic forgetting
+rubric_notes: >
+  A strong answer is genuinely comparative: it lays out the tradeoffs (memory and compute cost,
+  quality gap on hard tasks, serving many adapters, forgetting, merge behavior) and gives
+  conditions favoring each side, each grounded in a cited paper. Penalize a one-sided pitch for
+  either method, and any claimed benchmark delta not supported by a retrieved abstract.

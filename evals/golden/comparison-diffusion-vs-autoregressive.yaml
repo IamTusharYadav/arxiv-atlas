@@ -1,0 +1,17 @@
+id: comparison-diffusion-vs-autoregressive
+category: comparison
+question: How do diffusion language models compare to autoregressive ones for text generation?
+in_scope: true
+expected_topics:
+  - diffusion language models
+  - autoregressive generation
+  - parallel decoding
+  - inference speed
+  - text quality
+rubric_notes: >
+  A strong answer contrasts the generation mechanism (iterative denoising over a whole sequence
+  versus left-to-right next-token prediction) and then the consequences the abstracts actually
+  report: parallel or any-order decoding and its speed implications, controllability and infilling,
+  and the quality or scale gap against mature autoregressive models. Cited work for each claim.
+  Penalize treating diffusion as strictly better or strictly worse, and any performance number
+  presented without the paper it came from.

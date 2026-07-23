@@ -1,0 +1,16 @@
+id: specific-topic-swe-agents
+category: specific-topic
+question: How are LLM agents being used to resolve real software engineering issues?
+in_scope: true
+expected_topics:
+  - software engineering agents
+  - issue resolution
+  - code repair
+  - repository context
+  - agent benchmarks
+rubric_notes: >
+  A strong answer covers how these agents are built and measured: localizing the fix in a
+  repository, iterating with execution feedback such as tests or a runtime, and the benchmarks used
+  to score them, along with reported limitations (flaky verification, contamination, cost per
+  issue). Penalize a generic description of code generation that never engages with the agentic
+  loop over a repository, and any benchmark score stated without a citation.

@@ -1,0 +1,17 @@
+id: ambiguous-make-it-faster
+category: ambiguous
+question: How do I make my model faster?
+in_scope: true
+expected_topics:
+  - quantization
+  - distillation
+  - speculative decoding
+  - efficient attention
+  - training efficiency
+rubric_notes: >
+  The question does not say training or inference, which model, or which resource is the
+  constraint. A strong answer names the ambiguity in one line and then organizes the grounded
+  answer by axis (weight compression, smaller student models, decoding-time tricks, attention and
+  serving efficiency), each with cited work, rather than picking one interpretation silently.
+  Penalize an answer that assumes a single reading without saying so, and one that lists techniques
+  with no sense of which constraint each addresses.

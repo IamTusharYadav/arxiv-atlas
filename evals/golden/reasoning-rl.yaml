@@ -1,0 +1,16 @@
+id: reasoning-rl
+category: technical-survey
+question: How is reinforcement learning being used to improve LLM reasoning?
+in_scope: true
+expected_topics:
+  - reinforcement learning
+  - chain of thought
+  - reward models
+  - verifiable rewards
+  - reasoning
+rubric_notes: >
+  A strong answer distinguishes method families (RLHF-style preference optimization, RL from
+  verifiable or rule-based rewards, self-improvement and rejection sampling, process versus
+  outcome reward models) with at least one cited paper each, and notes open issues such as reward
+  hacking or verifier reliability. Penalize conflating all approaches as "RLHF", and answers that
+  describe generic reasoning prompting without the RL training component.

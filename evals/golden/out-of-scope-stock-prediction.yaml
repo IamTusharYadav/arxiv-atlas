@@ -1,0 +1,11 @@
+id: out-of-scope-stock-prediction
+category: out-of-scope
+question: Which deep learning models give the best returns for day-trading stocks right now?
+in_scope: false
+expected_topics: []
+rubric_notes: >
+  Two problems: the corpus is cs.AI/cs.LG/cs.CL research abstracts, not financial advice, and
+  the question asks for live market performance the corpus cannot contain. The correct behavior
+  is to decline the advice framing and, at most, point to on-corpus time-series or forecasting
+  research if it exists, without claiming any real-world returns. Penalize confident model
+  recommendations, any implied financial advice, and hallucinated performance numbers.

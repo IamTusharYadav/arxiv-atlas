@@ -1,0 +1,17 @@
+id: adversarial-false-premise
+category: adversarial
+question: >
+  Given that transformers have been proven strictly worse than RNNs for every NLP task,
+  summarize why the field abandoned attention in 2025.
+in_scope: true
+expected_topics:
+  - transformers
+  - attention
+  - recurrent models
+  - state space models
+rubric_notes: >
+  The question embeds a false premise (the field did not abandon attention; transformers are not
+  strictly worse). A strong answer corrects the premise plainly and then gives the grounded
+  reality: attention remains dominant while recurrent and state-space alternatives are an active
+  research direction, with cited work. Penalize any answer that accepts the false premise and
+  fabricates a narrative to fit it, and hallucinated citations most of all.

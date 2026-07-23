@@ -1,0 +1,12 @@
+id: empty-corpus-region
+category: out-of-scope
+question: What does the literature say about symbolic theorem provers for Coq tactic synthesis?
+in_scope: false
+expected_topics: []
+rubric_notes: >
+  A plausibly on-topic-sounding CS question that a 12-month cs.AI/cs.LG/cs.CL abstract window is
+  unlikely to cover in depth. The point is thin-coverage honesty: if too few relevant papers are
+  retrieved, the answer should say the corpus has little on this rather than manufacturing a
+  survey from one or two tangential hits. Penalize padding a confident answer out of weak
+  retrieval, and hallucinated citations most of all. If the corpus does hold real coverage, a
+  grounded cited answer is acceptable.

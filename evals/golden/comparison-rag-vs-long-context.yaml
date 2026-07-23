@@ -1,0 +1,19 @@
+id: comparison-rag-vs-long-context
+category: comparison
+question: >
+  Now that models have very long context windows, when is retrieval-augmented generation still
+  worth it instead of putting everything in the prompt?
+in_scope: true
+expected_topics:
+  - retrieval-augmented generation
+  - long context
+  - context window
+  - retrieval
+  - inference cost
+rubric_notes: >
+  A strong answer treats this as a real tradeoff rather than declaring a winner: it should cover
+  at least cost and latency per token, retrieval precision versus attention dilution over long
+  inputs (lost-in-the-middle style degradation), freshness and updatability of an external index,
+  and evidence attribution. Each axis needs a cited paper. Penalize an answer that only restates
+  what each approach is without comparing them, and one that claims long context has settled the
+  question when the cited abstracts show active work on both sides.

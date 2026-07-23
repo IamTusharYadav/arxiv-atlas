@@ -1,0 +1,17 @@
+id: specific-topic-watermarking
+category: specific-topic
+question: What are the current approaches to watermarking and detecting LLM-generated text?
+in_scope: true
+expected_topics:
+  - watermarking
+  - machine-generated text detection
+  - robustness
+  - paraphrase attacks
+  - false positives
+rubric_notes: >
+  A strong answer separates the two families it is asked about: watermarks injected at generation
+  time (logit or sampling based schemes and their detection tests) and post-hoc detectors that see
+  only the text. It should carry the failure modes the abstracts report: robustness to paraphrasing
+  and editing, quality impact of the watermark, false-positive risk on human text, and evasion.
+  Penalize conflating the two families, and any claim of a solved or reliable detector that the
+  cited work does not support.
