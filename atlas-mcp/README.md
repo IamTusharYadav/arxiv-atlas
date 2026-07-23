@@ -16,11 +16,8 @@ semantic neighbours, never citations or lineage.
 | `search_papers(query, k=10)` | Semantic search, up to 25 hits with scores and abstract leads | Find papers on a topic when you have no arXiv id |
 | `get_paper(arxiv_id)` | Full detail and complete abstract for one paper | Read a paper in full; accepts any id or URL form |
 | `explore_from_paper(arxiv_id)` | The paper's similarity-graph neighbourhood | Branch out into related earlier work |
+| `find_bridge_papers(topic_a, topic_b, k=10)` | Papers close to both areas, with a similarity to each | Find work connecting two topics |
 | `get_topic_clusters(topic, k=0)` | Groups topic papers into unnamed sub-areas | Get oriented in an unfamiliar area |
-
-`find_bridge_papers` (papers bridging two areas) is planned once the server-side bridge route
-ships; it needs a wider search than the public API exposes, so it is built server-side rather than
-as a weak client-side approximation.
 
 ## Install
 
