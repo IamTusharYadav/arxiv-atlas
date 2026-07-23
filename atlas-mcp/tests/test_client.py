@@ -80,9 +80,11 @@ def test_gives_up_after_one_5xx_retry() -> None:
         calls["n"] += 1
         return httpx.Response(503)
 
-    with pytest.raises(AtlasUnavailable):
+    with pytest.raises(AtlasUnavailable) as exc:
         _client(handler).get("/api/v1/search")
     assert calls["n"] == 2
+    # the model on the other end decides whether to try again, so the note has to say it is worth it
+    assert "retry" in str(exc.value).lower()
 
 
 def test_transport_error_is_not_leaked() -> None:

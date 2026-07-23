@@ -13,6 +13,11 @@ DEFAULT_API_URL = "https://99a0zbyk70.execute-api.us-east-1.amazonaws.com"
 # sensitive, so keep them out of the logs whatever the host's log level is.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+# The caller is a model, so say the failure is transient instead of leaving it to guess. Two
+# consecutive cold-start 503s were measured live, which is one more than the retry below covers,
+# and "unavailable" alone reads as broken when the service is merely asleep.
+COLD_START_NOTE = "Atlas is unavailable. It may be cold-starting, so this is worth retrying once."
+
 
 class AtlasError(Exception):
     """Something a tool hands back to the model as a note instead of crashing on."""
@@ -50,12 +55,12 @@ class AtlasClient:
         # gateway gives up first and returns 503 at its own ~30s ceiling. Same transient, so
         # retry once on both rather than betting on which wins the race.
         last_exc: httpx.TimeoutException | None = None
-        message = "Atlas API is unavailable."
+        message = COLD_START_NOTE
         for attempt in (1, 2):
             try:
                 resp = self._http.get(self.base_url + path, params=params)
             except httpx.TimeoutException as exc:
-                last_exc, message = exc, "Atlas API timed out."
+                last_exc, message = exc, f"Atlas API timed out. {COLD_START_NOTE}"
                 continue
             except httpx.HTTPError as exc:
                 # The transport error can name the internal endpoint, so don't let it through.
@@ -73,7 +78,7 @@ class AtlasClient:
         if resp.status_code == 404:
             raise NotFound("Not in the corpus.")
         if resp.status_code >= 500:
-            raise AtlasUnavailable("Atlas API is unavailable.")
+            raise AtlasUnavailable(COLD_START_NOTE)
         if resp.status_code >= 400:
             raise AtlasError("Atlas rejected the request.")
         data: dict[str, Any] = resp.json()

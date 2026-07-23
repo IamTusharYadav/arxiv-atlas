@@ -31,6 +31,7 @@ page reports corpus size and live health.
 ## Table of contents
 
 - [Demo](#demo)
+- [MCP server](#mcp-server)
 - [Results](#results)
 - [Why it is built this way](#why-it-is-built-this-way)
 - [Architecture](#architecture)
@@ -56,6 +57,37 @@ The live application is at <https://atlas.tusharyadav.dev>.
 problems, and an interactive research map. **Ask a question** and watch the pipeline work through
 it, then get a cited brief whose citations scroll to the referenced paper, with a graph of how the
 cited papers relate.
+
+## MCP server
+
+The corpus and its graph are also available to AI assistants as tools, over the
+[Model Context Protocol](https://modelcontextprotocol.io). Published as
+[`arxiv-atlas-mcp`](https://pypi.org/project/arxiv-atlas-mcp/); source in
+[`atlas-mcp/`](atlas-mcp/).
+
+```json
+{
+  "mcpServers": {
+    "arxiv-atlas": { "command": "uvx", "args": ["arxiv-atlas-mcp"] }
+  }
+}
+```
+
+| Tool | What it does |
+| --- | --- |
+| `search_papers(query, k=10)` | Semantic search over the corpus, with scores and abstract leads |
+| `get_paper(arxiv_id)` | Full detail for one paper; accepts any id or arxiv.org URL form |
+| `explore_from_paper(arxiv_id)` | The paper's similarity neighbourhood, each node with a lead |
+| `get_topic_clusters(topic, k=0)` | Groups a topic's papers into unnamed sub-areas to name yourself |
+
+Every tool reads the versioned `/api/v1` surface, which runs no language model
+([ADR 0004](docs/adr/0004-versioned-mcp-surface.md)), so the tools keep working when the daily
+LLM budget for the web app is exhausted, and they cannot drain it.
+
+A fifth tool, `find_bridge_papers`, was built and then cut after hand-validation over 30 topic
+pairs: it found real cross-topic work when it existed, but fabricated confident results for all
+11 pairs where none did, and no threshold separated the two cases.
+[ADR 0005](docs/adr/0005-no-bridge-tool.md) has the measurements.
 
 ## Results
 
@@ -199,6 +231,7 @@ High-level flow:
 |   |-- atlas_agents/        Framework-free agent harness, Bedrock client, ask() and map_topic(),
 |   |                        pipeline steps, prompt registry (prompts/*.yaml), Langfuse tracing
 |   `-- atlas_api/           FastAPI app, async job store, DynamoDB adapters, Lambda handler
+|-- atlas-mcp/               Standalone MCP server package (arxiv-atlas-mcp) over the v1 API
 |-- frontend/                React + Vite single-page app (see frontend/package.json)
 |-- evals/                   Golden query set (evals/golden/*.yaml), judge, and eval runner
 |-- tests/                   unit/, integration/, and model/ (opt-in) test suites + fixtures
@@ -443,6 +476,19 @@ origin.
 | `GET /api/landscape/{job_id}` | Poll an async landscape job. |
 | `GET /api/graph/{arxiv_id}` | The similarity neighborhood of one paper. |
 | `GET /api/status` | Health and live corpus size. |
+
+The versioned read-only surface below is what the [MCP server](#mcp-server) pins against. No route
+on it calls a language model, and every response carries a `corpus` block
+(`categories`, `size`, `last_ingested_at`) so a client can caveat coverage and see a stalled
+ingest. Shapes are frozen once published; a breaking change means `/api/v2` beside it
+([ADR 0004](docs/adr/0004-versioned-mcp-surface.md)).
+
+| Method + path | Purpose |
+| --- | --- |
+| `GET /api/v1/search?q&k` | Semantic search. Results carry a score and a ~400-char abstract lead. |
+| `GET /api/v1/paper/{arxiv_id}` | Full detail and complete abstract. Accepts any arXiv id or URL form. |
+| `GET /api/v1/clusters?q&k` | Retrieve wide, k-means, return unnamed groups for the caller to label. |
+| `GET /api/v1/graph/{arxiv_id}` | The similarity neighborhood, with an abstract lead on every node. |
 
 Example: ask a question (async path):
 
