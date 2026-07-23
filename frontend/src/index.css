@@ -1316,3 +1316,101 @@ footer {
     margin-bottom: 0.6rem;
   }
 }
+
+/* Eval history chart */
+
+.status-page h3 {
+  font-size: 0.95rem;
+  margin: 1.5rem 0 0;
+}
+
+.eval-history {
+  margin: 0.5rem 0 0;
+}
+
+.eval-history figcaption {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 0.4rem;
+}
+
+.eval-chart {
+  width: 100%;
+  height: auto;
+  max-width: 34rem;
+  display: block;
+}
+
+.eval-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.eval-tick {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+.eval-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* The ring keeps two dots readable where series cross, which they do near the ceiling. */
+.eval-dot {
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.eval-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  padding: 0;
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.eval-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.eval-legend strong {
+  color: var(--text);
+}
+
+.eval-table {
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.eval-table summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.eval-table table {
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+.eval-table th,
+.eval-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.3rem 0.6rem 0.3rem 0;
+  text-align: right;
+}
+
+.eval-table thead th,
+.eval-table tbody th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+}

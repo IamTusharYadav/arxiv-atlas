@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getStatus } from "./api";
+import EvalHistory from "./EvalHistory";
 
 type Health =
   | { kind: "checking" }
@@ -68,9 +69,8 @@ export default function StatusPage() {
           saved example runs are served instead.
         </dd>
       </dl>
-      <p className="hint">
-        Eval history lands here in the next phase, once nightly scoring is publishing results.
-      </p>
+      <h3>Answer quality over time</h3>
+      <EvalHistory />
     </section>
   );
 }
