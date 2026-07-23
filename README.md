@@ -502,14 +502,17 @@ it with an LLM judge, comparing against `evals/baseline.json`.
 
 ```sh
 uv sync --extra agents --extra ingest
-uv run python -m evals.run_evals --subset 15     # score the first N queries
+uv run python -m evals.run_evals --subset 15     # score N queries, balanced across categories
 uv run python -m evals.run_evals --full          # score the whole set
+uv run python -m evals.run_evals --id reasoning-rl   # score one query, for debugging a red score
 uv run python -m evals.run_evals --full --update-baseline   # save this run as the new baseline
 #   --samples N   judge samples per answer (median); default 1
 ```
 
-Evals need `QDRANT_URL` / `QDRANT_API_KEY` and AWS credentials for Bedrock. On a pull request,
-adding the `run-evals` label triggers `.github/workflows/evals.yml` to score the first 15 queries.
+Evals need `QDRANT_URL` / `QDRANT_API_KEY` and AWS credentials for Bedrock.
+`.github/workflows/evals.yml` runs them two ways: label a pull request `run-evals` to score the
+15-query subset against the baseline, and a weekly scheduled job scores the whole set, appends to
+`evals/history.json`, and commits it back so the record survives the ephemeral runner.
 
 </details>
 

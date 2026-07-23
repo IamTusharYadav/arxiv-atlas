@@ -1,22 +1,27 @@
 name: Evals
 
-# Opt-in smoke gate: label a PR `run-evals` to score the golden subset against the baseline.
-# Kept out of ci.yml so the heavy ruff/mypy/pytest job does not re-run on every label change;
-# this workflow needs live Bedrock and a populated Qdrant, which the standard checks do not.
+# Two entry points, both needing live Bedrock and a populated Qdrant, which is why none of this
+# lives in ci.yml:
+#   smoke     - opt-in per PR, label it `run-evals`, scores a category-balanced subset.
+#   scheduled - weekly full run that records history and gates on the baseline.
 on:
   pull_request:
     types: [opened, reopened, synchronize, labeled]
+  schedule:
+    # Sunday 06:00 UTC, clear of the 02:30 nightly ingest and its 120 minute ceiling.
+    - cron: "0 6 * * 0"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: evals-${{ github.event.pull_request.number }}
+  group: evals-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   smoke:
-    if: contains(github.event.pull_request.labels.*.name, 'run-evals')
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-evals')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -38,7 +43,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra agents --extra ingest
 
-      - name: Eval smoke (first 15 golden queries)
+      - name: Eval smoke (15 golden queries, one per category in turn)
         env:
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
@@ -46,3 +51,56 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
         run: uv run python -m evals.run_evals --subset 15
+
+  scheduled:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write # the run appends to evals/history.json and pushes it back
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-bge-small-en-v1.5
+
+      - name: Install dependencies
+        run: uv sync --extra agents --extra ingest
+
+      # continue-on-error so a regression still records its history row; the gate is re-raised
+      # after the commit, otherwise the one run worth studying is the one that never lands.
+      - name: Full eval run
+        id: evals
+        continue-on-error: true
+        env:
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+        run: uv run python -m evals.run_evals --full
+
+      # A CI runner's disk is ephemeral, so history has to leave the runner or it never existed.
+      # The repo is the store: versioned, free, diffable, and readable by the status page build.
+      - name: Commit history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evals/history.json
+          git diff --staged --quiet && echo "no new history row" && exit 0
+          git commit -m "chore(evals): record scheduled eval run [skip ci]"
+          git push
+
+      - name: Fail on regression
+        if: steps.evals.outcome == 'failure'
+        run: |
+          echo "::error::eval run regressed against evals/baseline.json or errored, see the log above"
+          exit 1
