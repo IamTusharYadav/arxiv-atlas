@@ -6,6 +6,7 @@ from atlas_agents.bedrock import HAIKU, SONNET
 from atlas_agents.prompts import (
     CHECK,
     EXTRACTOR,
+    LANDSCAPE,
     PLANNER,
     RERANKER,
     SYNTHESIZER,
@@ -38,6 +39,16 @@ def test_static_card_render_is_untouched() -> None:
 def test_synthesizer_runs_on_sonnet_the_rest_on_haiku() -> None:
     assert SYNTHESIZER.model == SONNET
     assert {PLANNER.model, RERANKER.model, EXTRACTOR.model, CHECK.model} == {HAIKU}
+
+
+def test_prose_cards_carry_the_no_lineage_rail() -> None:
+    # The corpus has similarity edges and no citation data, so a brief claiming one paper
+    # builds on another is fabrication. It happened (adversarial-citation-counts scored
+    # 1/1/1), which is why the rail is pinned rather than left to a future edit.
+    for card in (SYNTHESIZER, LANDSCAPE):
+        system = card.system.lower()
+        assert "builds on" in system
+        assert "citation" in system
 
 
 def test_get_unknown_id_raises() -> None:
