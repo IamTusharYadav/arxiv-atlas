@@ -45,20 +45,25 @@ class AtlasClient:
         self._http = http or httpx.Client(timeout=timeout)
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        # The API loads an embedding model on cold start, so the first call can be slow enough to
-        # time out. Retry once before giving up.
-        last_timeout: httpx.TimeoutException | None = None
-        for _attempt in (1, 2):
+        # The API loads an embedding model on cold start, so the first call after an idle period
+        # is slow. Measured live, it surfaces either way: our timeout fires at 30s, or the API
+        # gateway gives up first and returns 503 at its own ~30s ceiling. Same transient, so
+        # retry once on both rather than betting on which wins the race.
+        last_exc: httpx.TimeoutException | None = None
+        message = "Atlas API is unavailable."
+        for attempt in (1, 2):
             try:
                 resp = self._http.get(self.base_url + path, params=params)
             except httpx.TimeoutException as exc:
-                last_timeout = exc
+                last_exc, message = exc, "Atlas API timed out."
                 continue
             except httpx.HTTPError as exc:
                 # The transport error can name the internal endpoint, so don't let it through.
                 raise AtlasUnavailable("Atlas API is unavailable.") from exc
+            if resp.status_code >= 500 and attempt == 1:
+                continue
             return self._handle(resp)
-        raise AtlasUnavailable("Atlas API timed out.") from last_timeout
+        raise AtlasUnavailable(message) from last_exc
 
     @staticmethod
     def _handle(resp: httpx.Response) -> dict[str, Any]:

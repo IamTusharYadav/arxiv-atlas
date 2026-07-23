@@ -58,6 +58,33 @@ def test_retries_once_on_timeout_then_raises() -> None:
     assert calls["n"] == 2  # one retry, not an infinite loop
 
 
+def test_retries_once_on_5xx_then_succeeds() -> None:
+    # A cold start comes back as a gateway 503, not a client timeout. The first call must not be
+    # the one the user sees fail.
+    calls = {"n": 0}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(503)
+        return httpx.Response(200, json={"results": []})
+
+    assert _client(handler).get("/api/v1/search") == {"results": []}
+    assert calls["n"] == 2
+
+
+def test_gives_up_after_one_5xx_retry() -> None:
+    calls = {"n": 0}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(503)
+
+    with pytest.raises(AtlasUnavailable):
+        _client(handler).get("/api/v1/search")
+    assert calls["n"] == 2
+
+
 def test_transport_error_is_not_leaked() -> None:
     def handler(req: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connect to 10.0.0.1 failed", request=req)
