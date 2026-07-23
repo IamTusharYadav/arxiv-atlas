@@ -12,6 +12,7 @@ from atlas_agents.bedrock import BedrockClient, StructuredOutputError
 from atlas_agents.harness import AgentError, StepRecord, StepSink
 from atlas_agents.landscape import Landscape, inner_links, map_topic
 from atlas_api.jobs import Job, JobStore
+from atlas_api.v1 import register_v1
 from atlas_core.budget import DailyBudgetExceeded, DailyBudgetGuard
 from atlas_core.cache import ResponseCache
 from atlas_core.embedding import QUERY_PREFIX, Embedder
@@ -537,5 +538,9 @@ def create_app(
     @app.get("/api/status")
     def status() -> StatusResponse:
         return StatusResponse(status="ok", corpus_size=store.count())
+
+    # The versioned read-only surface the MCP package depends on (ADR 0004). Bedrock-free, so it
+    # rides the same rate limiter but never the budget guard.
+    register_v1(app, store=store, embedder=embedder)
 
     return app

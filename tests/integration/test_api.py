@@ -467,3 +467,95 @@ def test_query_status_404_when_async_disabled(
     seed(memory_store, fake_embedder)
     # client_for wires no jobs store, so the app runs sync and the status route reports async off.
     assert client_for(memory_store, []).get("/api/query/whatever").status_code == 404
+
+
+# --- v1 surface (MCP contract) ---
+
+
+def _seed_edges(store: QdrantStore) -> None:
+    store.set_edges(
+        IDS[0],
+        [
+            Edge(source=IDS[0], target=IDS[1], weight=0.8),
+            Edge(source=IDS[0], target=IDS[2], weight=0.7),
+        ],
+    )
+
+
+def test_v1_search_carries_corpus_and_truncated_leads(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    body = (
+        client_for(memory_store, []).get("/api/v1/search", params={"q": "kv cache", "k": 2}).json()
+    )
+
+    assert body["corpus"]["size"] == 3
+    assert body["corpus"]["categories"] == ["cs.AI", "cs.LG", "cs.CL"]
+    assert len(body["results"]) == 2  # k honoured
+    for r in body["results"]:
+        assert r["arxiv_id"] and r["published_month"].count("-") == 1
+        assert len(r["abstract_lead"]) <= 401  # 400 + ellipsis
+
+
+def test_v1_search_empty_is_a_note_not_an_error(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    # empty corpus: a search returns 200 with a note, never a 4xx/5xx (D5)
+    resp = client_for(memory_store, []).get("/api/v1/search", params={"q": "anything"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["results"] == []
+    assert body["note"]
+
+
+def test_v1_paper_normalizes_the_id_and_returns_full_abstract(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    api = client_for(memory_store, [])
+    # a versioned, prefixed form resolves to the stored base id
+    body = api.get(f"/api/v1/paper/arXiv:{IDS[0]}v2").json()
+    assert body["paper"]["arxiv_id"] == IDS[0]
+    assert body["paper"]["abs_url"].endswith(IDS[0])
+    # full abstract, never the truncated lead: no ellipsis, and it matches the stored text
+    assert body["paper"]["abstract"] == memory_store.get([IDS[0]])[0].paper.abstract
+    assert not body["paper"]["abstract"].endswith("…")
+
+
+def test_v1_paper_missing_is_404(memory_store: QdrantStore, fake_embedder: FakeEmbedder) -> None:
+    seed(memory_store, fake_embedder)
+    assert client_for(memory_store, []).get("/api/v1/paper/2607.09999").status_code == 404
+
+
+def test_v1_graph_adds_leads_and_flags_forward_direction(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    _seed_edges(memory_store)
+    body = client_for(memory_store, []).get(f"/api/v1/graph/{IDS[0]}").json()
+
+    assert body["center"] == IDS[0]
+    assert {n["arxiv_id"] for n in body["nodes"]} == set(IDS)
+    assert all(n["abstract_lead"] for n in body["nodes"])  # every node carries text now
+    assert body["note"] is None  # has edges
+
+
+def test_v1_graph_note_when_no_edges(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)  # no edges set
+    body = client_for(memory_store, []).get(f"/api/v1/graph/{IDS[0]}").json()
+    assert body["links"] == []
+    assert body["note"]
+
+
+def test_v1_clusters_groups_every_matched_paper(
+    memory_store: QdrantStore, fake_embedder: FakeEmbedder
+) -> None:
+    seed(memory_store, fake_embedder)
+    body = client_for(memory_store, []).get("/api/v1/clusters", params={"q": "models"}).json()
+
+    grouped = [p["arxiv_id"] for c in body["clusters"] for p in c["papers"]]
+    assert set(grouped) == set(IDS)  # every retrieved paper lands in exactly one cluster
+    assert len(grouped) == len(set(grouped))
