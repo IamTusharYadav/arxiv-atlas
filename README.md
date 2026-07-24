@@ -65,6 +65,14 @@ The corpus and its graph are also available to AI assistants as tools, over the
 [`arxiv-atlas-mcp`](https://pypi.org/project/arxiv-atlas-mcp/); source in
 [`atlas-mcp/`](atlas-mcp/).
 
+Claude Code:
+
+```sh
+claude mcp add -s user arxiv-atlas -- uvx arxiv-atlas-mcp
+```
+
+Claude Desktop, or any other MCP client, by config file:
+
 ```json
 {
   "mcpServers": {

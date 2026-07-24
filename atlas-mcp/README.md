@@ -20,15 +20,16 @@ semantic neighbours, never citations or lineage.
 
 ## Install
 
-Requires Python 3.10+.
+Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/). No install step of its own: `uvx`
+fetches and runs the server on demand.
+
+**Claude Code:**
 
 ```sh
-uvx arxiv-atlas-mcp        # run without installing
-# or
-pip install arxiv-atlas-mcp
+claude mcp add -s user arxiv-atlas -- uvx arxiv-atlas-mcp
 ```
 
-Add it to an MCP client (for example Claude Desktop) by pointing at the `arxiv-atlas-mcp` command:
+**Claude Desktop**, or any other MCP client, by config file:
 
 ```json
 {
@@ -37,6 +38,10 @@ Add it to an MCP client (for example Claude Desktop) by pointing at the `arxiv-a
   }
 }
 ```
+
+On Windows, a client that does not inherit your shell PATH may not find `uvx`; give it the
+absolute path (`C:\Users\<you>\.local\bin\uvx.exe`) instead. Restart the client after either
+change, since MCP servers are spawned at startup.
 
 ## Configuration
 
