@@ -5,6 +5,7 @@ corpus is arXiv cs.AI/cs.LG/cs.CL abstracts from roughly the last twelve months,
 embedding similarity, with no citation data.
 """
 
+from importlib.metadata import version
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -12,6 +13,9 @@ from mcp.server.fastmcp import FastMCP
 from atlas_mcp.client import AtlasClient, AtlasError, NotFound
 
 mcp = FastMCP("arxiv-atlas")
+# FastMCP has no version kwarg; set it on the lowlevel server so the handshake serverInfo reports it.
+# Read from package metadata so there is one place to bump.
+mcp._mcp_server.version = version("arxiv-atlas-mcp")
 _client = AtlasClient()
 
 
