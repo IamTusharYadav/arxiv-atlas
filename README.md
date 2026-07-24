@@ -566,6 +566,8 @@ backfill window before nightly mode can resume.
 The golden set lives in [`evals/golden/`](evals/golden/) (one YAML file per query; schema in
 [`evals/README.md`](evals/README.md)). The runner answers each query with the live agent and scores
 it with an LLM judge, comparing against `evals/baseline.json`.
+[`docs/evals.md`](docs/evals.md) is the longer writeup: how the gate is built and the cases where
+running the eval caught a fabrication that reasoning alone would have missed.
 
 ```sh
 uv sync --extra agents --extra ingest
