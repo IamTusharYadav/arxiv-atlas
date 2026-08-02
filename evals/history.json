@@ -33,5 +33,12 @@
     "faithfulness": 5.0,
     "citation_correctness": 5.0,
     "n": 30
+  },
+  {
+    "timestamp": "2026-08-02T08:37:15.184283+00:00",
+    "relevance": 4.7,
+    "faithfulness": 4.933,
+    "citation_correctness": 5.0,
+    "n": 30
   }
 ]
