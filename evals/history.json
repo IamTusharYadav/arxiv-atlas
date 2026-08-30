@@ -61,5 +61,12 @@
     "faithfulness": 4.9,
     "citation_correctness": 4.9,
     "n": 30
+  },
+  {
+    "timestamp": "2026-08-30T11:31:42.673468+00:00",
+    "relevance": 4.767,
+    "faithfulness": 4.933,
+    "citation_correctness": 4.933,
+    "n": 30
   }
 ]
