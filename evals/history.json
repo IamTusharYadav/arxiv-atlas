@@ -110,5 +110,12 @@
     "faithfulness": 4.967,
     "citation_correctness": 5.0,
     "n": 30
+  },
+  {
+    "timestamp": "2026-10-25T11:00:25.439153+00:00",
+    "relevance": 4.767,
+    "faithfulness": 5.0,
+    "citation_correctness": 4.967,
+    "n": 30
   }
 ]
