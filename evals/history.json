@@ -131,5 +131,12 @@
     "faithfulness": 5.0,
     "citation_correctness": 5.0,
     "n": 30
+  },
+  {
+    "timestamp": "2026-11-15T13:38:43.103937+00:00",
+    "relevance": 4.733,
+    "faithfulness": 4.967,
+    "citation_correctness": 5.0,
+    "n": 30
   }
 ]
